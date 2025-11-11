@@ -7,8 +7,10 @@ set -e
 
 VERSION=${VERSION:-"1.0.0"}
 OUTPUT_DIR="./dist"
+GO=${GO:-"/usr/local/go/bin/go"}
 
 echo "🚀 Building Vigilon v${VERSION} for all platforms..."
+echo "📍 Using Go: $GO"
 echo ""
 
 # Create output directory
@@ -21,13 +23,13 @@ NC='\033[0m' # No Color
 
 # Build for Linux AMD64 (Server + Agent)
 echo -e "${BLUE}Building for Linux AMD64...${NC}"
-CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+CGO_ENABLED=1 GOOS=linux GOARCH=amd64 $GO build \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o ${OUTPUT_DIR}/vigilon-server-linux-amd64 \
     cmd/server/main.go
 echo -e "${GREEN}✓ vigilon-server-linux-amd64${NC}"
 
-CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
+CGO_ENABLED=1 GOOS=linux GOARCH=amd64 $GO build \
     -ldflags="-s -w -X main.version=${VERSION}" \
     -o ${OUTPUT_DIR}/vigilon-agent-linux-amd64 \
     cmd/agent/main.go
@@ -37,7 +39,7 @@ echo ""
 # Build for Linux ARM64 (Agent only - Raspberry Pi)
 echo -e "${BLUE}Building for Linux ARM64 (Raspberry Pi)...${NC}"
 if command -v aarch64-linux-gnu-gcc &> /dev/null; then
-    CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc go build \
+    CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc $GO build \
         -ldflags="-s -w -X main.version=${VERSION}" \
         -o ${OUTPUT_DIR}/vigilon-agent-linux-arm64 \
         cmd/agent/main.go
@@ -51,7 +53,7 @@ echo ""
 # Build for Windows AMD64 (Agent only)
 echo -e "${BLUE}Building for Windows AMD64...${NC}"
 if command -v x86_64-w64-mingw32-gcc &> /dev/null; then
-    CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc go build \
+    CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc $GO build \
         -ldflags="-s -w -X main.version=${VERSION}" \
         -o ${OUTPUT_DIR}/vigilon-agent-windows-amd64.exe \
         cmd/agent/main.go
