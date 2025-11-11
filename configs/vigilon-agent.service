@@ -1,0 +1,18 @@
+[Unit]
+Description=Vigilon Agent - Service Monitor Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/vigilon-agent -config /etc/vigilon-agent/config.yaml
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

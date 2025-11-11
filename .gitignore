@@ -1,0 +1,52 @@
+# Binaries
+vigilon-server
+vigilon-agent
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Pre-compiled agent binaries (large files, use releases)
+web/static/bin/vigilon-agent-*
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# Configuration files (exclude examples)
+config.yaml
+configs/config.yaml
+
+# Log files
+*.log
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/

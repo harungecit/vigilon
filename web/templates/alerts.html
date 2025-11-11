@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1>Vigilon</h1>
+            <ul>
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/servers">Servers</a></li>
+                <li><a href="/alerts" class="active">Alerts</a></li>
+                <li><a href="/users">Users</a></li>
+                <li><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h2>Recent Alerts</h2>
+            <div>
+                <a href="/alerts/archived" class="btn btn-sm">View Archived</a>
+                <button class="btn" onclick="archiveAllAlerts()">Archive All</button>
+            </div>
+        </div>
+
+        {{if not .Alerts}}
+        <div class="empty-state">
+            <p>No alerts yet. Everything is running smoothly!</p>
+        </div>
+        {{else}}
+        <div class="alerts-list">
+            {{range .Alerts}}
+            <div class="alert-card {{if .Acknowledged}}acknowledged{{end}}" data-alert-id="{{.ID}}">
+                <div class="alert-header">
+                    <span class="alert-id">#{{.ID}}</span>
+                    <span class="alert-status status-{{.Status}}">{{.Status}}</span>
+                    <span class="alert-time">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</span>
+                </div>
+                <div class="alert-body">
+                    <p>{{.Message}}</p>
+                </div>
+                <div class="alert-footer">
+                    <span class="alert-via">Sent via: {{.SentVia}}</span>
+                    {{if not .Acknowledged}}
+                    <button class="btn btn-sm" onclick="acknowledgeAlert({{.ID}})">Acknowledge</button>
+                    {{else}}
+                    <span class="acknowledged-badge">Acknowledged {{.AcknowledgedAt.Format "2006-01-02 15:04:05"}}</span>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+        </div>
+        <div style="text-align: center; margin-top: 2rem;">
+            <button id="loadMoreBtn" class="btn" onclick="loadMoreAlerts()">Load More</button>
+            <div id="loading-indicator" class="loading" style="display: none;">Loading more alerts</div>
+        </div>
+        {{end}}
+    </div>
+
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/alerts.js"></script>
+    <script>
+        // Set initial offset to skip already rendered alerts
+        currentOffset = {{len .Alerts}};
+    </script>
+</body>
+</html>

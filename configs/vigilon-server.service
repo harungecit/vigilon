@@ -1,0 +1,24 @@
+[Unit]
+Description=Vigilon Server - Service Monitoring System
+After=network.target
+
+[Service]
+Type=simple
+User=vigilon
+Group=vigilon
+WorkingDirectory=/opt/vigilon
+ExecStart=/opt/vigilon/vigilon-server -config /opt/vigilon/configs/config.yaml
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/vigilon
+
+[Install]
+WantedBy=multi-user.target

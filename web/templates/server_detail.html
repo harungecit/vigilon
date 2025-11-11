@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1>Vigilon</h1>
+            <ul>
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/servers">Servers</a></li>
+                <li><a href="/alerts">Alerts</a></li>
+                <li><a href="/users">Users</a></li>
+                <li><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h2>{{.Server.Name}}</h2>
+            <div>
+                <button class="btn btn-sm" onclick="toggleEdit()">Edit Server</button>
+                <button class="btn" onclick="window.location.href='/servers'">Back to Servers</button>
+            </div>
+        </div>
+
+        <div class="server-detail">
+            <!-- Server Information -->
+            <div class="detail-section">
+                <h3>Server Information</h3>
+                <table class="detail-table" id="serverInfo">
+                    <tr>
+                        <td><strong>Name:</strong></td>
+                        <td>{{.Server.Name}}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Hostname:</strong></td>
+                        <td>{{.Server.Hostname}}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>IP Address:</strong></td>
+                        <td>{{.Server.IPAddress}}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Port:</strong></td>
+                        <td>{{.Server.Port}}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>OS:</strong></td>
+                        <td>{{.Server.OS}}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Monitoring Mode:</strong></td>
+                        <td>{{.Server.MonitoringMode}}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Check Interval:</strong></td>
+                        <td>{{if eq .Server.CheckInterval 0}}Default (30s){{else}}{{.Server.CheckInterval}}s{{end}}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Status:</strong></td>
+                        <td>
+                            <span class="badge {{if .Server.Enabled}}badge-success{{else}}badge-secondary{{end}}">
+                                {{if .Server.Enabled}}Enabled{{else}}Disabled{{end}}
+                            </span>
+                            <button class="btn btn-sm" onclick="toggleServerStatus({{.Server.ID}}, {{.Server.Enabled}})" style="margin-left: 1rem;">
+                                {{if .Server.Enabled}}Disable{{else}}Enable{{end}}
+                            </button>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Last Seen:</strong></td>
+                        <td>
+                            {{if .Server.LastSeen}}
+                            {{.Server.LastSeen.Format "2006-01-02 15:04:05"}}
+                            {{else}}
+                            Never
+                            {{end}}
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Edit Form (Hidden by default) -->
+                <form id="editServerForm" style="display: none; margin-top: 1rem;">
+                    <div class="form-group">
+                        <label>Server Name:</label>
+                        <input type="text" name="name" value="{{.Server.Name}}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Hostname:</label>
+                        <input type="text" name="hostname" value="{{.Server.Hostname}}">
+                    </div>
+                    <div class="form-group">
+                        <label>IP Address:</label>
+                        <input type="text" name="ip_address" value="{{.Server.IPAddress}}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Port:</label>
+                        <input type="number" name="port" value="{{.Server.Port}}">
+                    </div>
+                    <div class="form-group">
+                        <label>Check Interval (seconds, 0 = default):</label>
+                        <input type="number" name="check_interval" value="{{.Server.CheckInterval}}" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="notify_telegram" {{if .Server.NotifyTelegram}}checked{{end}}>
+                            Notify via Telegram
+                        </label>
+                    </div>
+                    <button type="submit" class="btn">Save Changes</button>
+                    <button type="button" class="btn btn-sm" onclick="toggleEdit()">Cancel</button>
+                </form>
+            </div>
+
+            <!-- Agent Installation (for Push mode) -->
+            {{if eq .Server.MonitoringMode "push"}}
+            <div class="detail-section">
+                <div class="section-header">
+                    <h3>Agent Installation</h3>
+                    <button class="btn btn-sm" onclick="toggleAgentScript()">Show/Hide Script</button>
+                </div>
+
+                <div id="agentScriptSection" style="display: none;">
+                    <div class="info-box">
+                        <p><strong>One-Line Installation:</strong></p>
+                        <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                            <li>Copy the command below</li>
+                            <li>Paste and run on your server ({{.Server.IPAddress}})</li>
+                            <li>Agent installs and starts automatically</li>
+                            <li>Service list is fetched from the panel - no manual configuration needed!</li>
+                        </ol>
+                    </div>
+
+                    <div class="install-script">
+                        <button type="button" class="copy-button" onclick="copyAgentScript(event)">Copy</button>
+                        <code id="agentInstallScript">Click "Show/Hide Script" to load...</code>
+                    </div>
+
+                    <p style="margin-top: 1rem; font-size: 0.9rem; color: #7f8c8d;">
+                        <strong>Note:</strong> Services are managed from the panel. Add services above, and the agent will automatically pick them up within 5 minutes.
+                    </p>
+
+                    <div class="info-box" style="margin-top: 1.5rem; background: #fff3e0; border-left-color: #ff9800;">
+                        <p><strong>Agent Management Commands:</strong></p>
+                        <div style="margin-top: 0.75rem;">
+                            <p style="margin: 0.5rem 0;"><strong>Check Status:</strong></p>
+                            <div class="install-script" style="background: #37474f; margin: 0.5rem 0;">
+                                <button type="button" class="copy-button" onclick="copyCommand(event, 'sudo systemctl status vigilon-agent')">Copy</button>
+                                <code>sudo systemctl status vigilon-agent</code>
+                            </div>
+
+                            <p style="margin: 0.5rem 0;"><strong>Stop Agent:</strong></p>
+                            <div class="install-script" style="background: #37474f; margin: 0.5rem 0;">
+                                <button type="button" class="copy-button" onclick="copyCommand(event, 'sudo systemctl stop vigilon-agent')">Copy</button>
+                                <code>sudo systemctl stop vigilon-agent</code>
+                            </div>
+
+                            <p style="margin: 0.5rem 0;"><strong>Start Agent:</strong></p>
+                            <div class="install-script" style="background: #37474f; margin: 0.5rem 0;">
+                                <button type="button" class="copy-button" onclick="copyCommand(event, 'sudo systemctl start vigilon-agent')">Copy</button>
+                                <code>sudo systemctl start vigilon-agent</code>
+                            </div>
+
+                            <p style="margin: 0.5rem 0;"><strong>Restart Agent:</strong></p>
+                            <div class="install-script" style="background: #37474f; margin: 0.5rem 0;">
+                                <button type="button" class="copy-button" onclick="copyCommand(event, 'sudo systemctl restart vigilon-agent')">Copy</button>
+                                <code>sudo systemctl restart vigilon-agent</code>
+                            </div>
+
+                            <p style="margin: 0.5rem 0;"><strong>View Logs:</strong></p>
+                            <div class="install-script" style="background: #37474f; margin: 0.5rem 0;">
+                                <button type="button" class="copy-button" onclick="copyCommand(event, 'sudo journalctl -u vigilon-agent -f')">Copy</button>
+                                <code>sudo journalctl -u vigilon-agent -f</code>
+                            </div>
+
+                            <p style="margin: 0.5rem 0;"><strong>Uninstall Agent:</strong></p>
+                            <div class="install-script" style="background: #c0392b; margin: 0.5rem 0;">
+                                <button type="button" class="copy-button" onclick="copyCommand(event, 'sudo systemctl stop vigilon-agent && sudo systemctl disable vigilon-agent && sudo rm /etc/systemd/system/vigilon-agent.service && sudo rm /usr/local/bin/vigilon-agent && sudo rm -rf /etc/vigilon-agent && sudo systemctl daemon-reload')">Copy</button>
+                                <code>sudo systemctl stop vigilon-agent && sudo systemctl disable vigilon-agent && sudo rm /etc/systemd/system/vigilon-agent.service && sudo rm /usr/local/bin/vigilon-agent && sudo rm -rf /etc/vigilon-agent && sudo systemctl daemon-reload</code>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {{end}}
+
+            <!-- Services -->
+            <div class="detail-section">
+                <div class="section-header">
+                    <h3>Services</h3>
+                    <button class="btn btn-sm" onclick="showAddServiceModal()">Add Service</button>
+                </div>
+
+                {{if not .Services}}
+                <p>No services configured for this server.</p>
+                {{else}}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Service Name</th>
+                            <th>Display Name</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{range .Services}}
+                        <tr>
+                            <td><code>{{.Name}}</code></td>
+                            <td>{{.DisplayName}}</td>
+                            <td>
+                                <span class="badge {{if .Enabled}}badge-success{{else}}badge-secondary{{end}}">
+                                    {{if .Enabled}}Enabled{{else}}Disabled{{end}}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm" onclick="toggleServiceStatus({{.ID}}, {{.Enabled}})">
+                                    {{if .Enabled}}Disable{{else}}Enable{{end}}
+                                </button>
+                                <button class="btn btn-sm" onclick="viewServiceHistory({{.ID}})">History</button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteService({{.ID}})">Delete</button>
+                            </td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+                {{end}}
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Service Modal -->
+    <div id="addServiceModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3>Add New Service</h3>
+            <form id="addServiceForm">
+                <input type="hidden" name="server_id" value="{{.Server.ID}}">
+                <div class="form-group">
+                    <label>Service Name (e.g., nginx.service): *</label>
+                    <input type="text" name="name" required placeholder="nginx.service">
+                </div>
+                <div class="form-group">
+                    <label>Display Name: *</label>
+                    <input type="text" name="display_name" required placeholder="Nginx Web Server">
+                </div>
+                <div class="form-group">
+                    <label>Description:</label>
+                    <textarea name="description" placeholder="Optional description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="enabled" checked>
+                        Enabled
+                    </label>
+                </div>
+                <button type="submit" class="btn">Add Service</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Service History Modal -->
+    <div id="serviceHistoryModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3>Service Check History</h3>
+            <div id="serviceHistoryContent">
+                <div class="loading">Loading history...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/server_detail.js"></script>
+    <script>
+        const serverData = {
+            id: {{.Server.ID}},
+            name: '{{.Server.Name}}',
+            os: '{{.Server.OS}}',
+            mode: '{{.Server.MonitoringMode}}',
+            token: '{{.Server.AgentToken}}'
+        };
+    </script>
+</body>
+</html>

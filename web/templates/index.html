@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1>Vigilon</h1>
+            <ul>
+                <li><a href="/" class="active">Dashboard</a></li>
+                <li><a href="/servers">Servers</a></li>
+                <li><a href="/alerts">Alerts</a></li>
+                <li><a href="/users">Users</a></li>
+                <li><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2>Service Status Dashboard</h2>
+        
+        <div class="info-box" style="margin-bottom: 2rem;">
+            <p><strong>ℹ️ About Dashboard:</strong> This page shows real-time status of all monitored services across your servers. Each card displays a server with its configured services and their current status (running ✅, stopped 🔴, failed ❌, degraded ⚠️).</p>
+        </div>
+
+        {{if not .Servers}}
+        <div class="empty-state">
+            <p>No servers configured yet.</p>
+            <a href="/servers" class="btn">Add Server</a>
+        </div>
+        {{else}}
+                <div class="server-grid">
+            {{range $serverData := .Servers}}
+            <div class="server-card">
+                <div class="server-header">
+                    <h3>{{$serverData.Server.Name}}</h3>
+                    <span class="badge {{if $serverData.Server.Enabled}}badge-success{{else}}badge-secondary{{end}}">
+                        {{if $serverData.Server.Enabled}}Enabled{{else}}Disabled{{end}}
+                    </span>
+                </div>
+                <div class="server-info">
+                    <p><strong>IP:</strong> {{$serverData.Server.IPAddress}}</p>
+                    <p><strong>OS:</strong> {{$serverData.Server.OS}}</p>
+                    <p><strong>Mode:</strong> {{$serverData.Server.MonitoringMode}}</p>
+                    {{if $serverData.Server.LastSeen}}
+                    <p><strong>Last Seen:</strong> {{$serverData.Server.LastSeen.Format "15:04:05"}}</p>
+                    {{else}}
+                    <p><strong>Last Seen:</strong> <span style="color: #e74c3c;">Never</span></p>
+                    {{end}}
+                </div>
+
+                {{if $serverData.Services}}
+                <div class="services-list">
+                    <h4>Monitored Services:</h4>
+                    <div class="service-status-grid">
+                        {{range $service := $serverData.Services}}
+                        {{if $service.Enabled}}
+                        {{$status := index $serverData.Statuses $service.ID}}
+                        <div class="service-status-card {{if $status}}{{$status.Status}}{{else}}unknown{{end}}">
+                            <div class="service-status-icon">
+                                {{if $status}}
+                                    {{if eq $status.Status "running"}}✅{{end}}
+                                    {{if eq $status.Status "stopped"}}🔴{{end}}
+                                    {{if eq $status.Status "failed"}}❌{{end}}
+                                    {{if eq $status.Status "degraded"}}⚠️{{end}}
+                                    {{if eq $status.Status "unknown"}}❓{{end}}
+                                {{else}}❓{{end}}
+                            </div>
+                            <div class="service-status-details">
+                                <div class="service-status-name">{{$service.DisplayName}}</div>
+                                {{if $status}}
+                                    {{if ne $status.Status "running"}}
+                                    {{if $status.ErrorMessage}}
+                                    <div class="service-status-error" title="{{$status.ErrorMessage}}">
+                                        {{$status.ErrorMessage}}
+                                    </div>
+                                    {{end}}
+                                    {{else}}
+                                    <div style="font-size: 0.75rem; color: #27ae60;">
+                                        {{if $status.PID}}PID: {{$status.PID}}{{end}}
+                                        {{if $status.CPU}} • CPU: {{printf "%.1f" $status.CPU}}%{{end}}
+                                    </div>
+                                    {{end}}
+                                {{end}}
+                            </div>
+                        </div>
+                        {{end}}
+                        {{end}}
+                    </div>
+                </div>
+                {{else}}
+                <p class="no-services">No services configured</p>
+                {{end}}
+
+                <div class="server-actions">
+                    <a href="/server/{{$serverData.Server.ID}}" class="btn btn-sm">View Details</a>
+                </div>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

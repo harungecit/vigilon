@@ -1,0 +1,71 @@
+server:
+  host: 0.0.0.0
+  port: 8090
+
+database:
+  path: ./vigilon.db
+
+telegram:
+  enabled: false
+  bot_token: ""
+  chat_ids:
+    - ""
+
+monitoring:
+  check_interval: 30s      # Check interval for monitoring
+  retention_days: 30       # How long to keep check history
+  alert_cooldown: 5m       # Minimum time between alerts for the same service
+
+# Server definitions (can also be managed via Web UI)
+servers:
+  - name: debian-server-1
+    hostname: server1.example.com
+    ip_address: 192.168.2.44
+    port: 22
+    os: linux
+    monitoring_mode: push    # pull, push, or hybrid
+    ssh_user: admin
+    ssh_key_path: /path/to/ssh/key
+    agent_token: ""          # Token for push mode
+    enabled: true
+    notify_telegram: true
+    services:
+      - name: rftt.service
+        display_name: RFTT Service
+        description: Main RFTT application service
+        enabled: true
+      - name: nginx.service
+        display_name: Nginx Web Server
+        description: Web server
+        enabled: true
+
+  - name: raspberry-pi
+    hostname: pi.local
+    ip_address: 192.168.2.50
+    port: 22
+    os: linux
+    monitoring_mode: hybrid
+    ssh_user: pi
+    ssh_key_path: /path/to/pi/key
+    enabled: true
+    notify_telegram: true
+    services:
+      - name: sync.service
+        display_name: Sync Service
+        description: Data synchronization service
+        enabled: true
+
+  - name: windows-server
+    hostname: win-srv.example.com
+    ip_address: 192.168.2.100
+    port: 5985
+    os: windows
+    monitoring_mode: push
+    agent_token: "your-secure-token-here"
+    enabled: true
+    notify_telegram: true
+    services:
+      - name: MyWindowsService
+        display_name: My Windows Service
+        description: Custom Windows service
+        enabled: true

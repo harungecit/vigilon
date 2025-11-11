@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  vigilon-server:
+    build:
+      context: .
+      target: server
+    image: vigilon-server:latest
+    container_name: vigilon-server
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      # Mount config file
+      - ./configs/config.yaml:/app/configs/config.yaml:ro
+      # Persist database
+      - vigilon-data:/app/data
+      # Optional: SSH keys for pull mode monitoring
+      - ~/.ssh:/root/.ssh:ro
+    environment:
+      - TZ=Europe/Istanbul
+    networks:
+      - vigilon-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8090/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Example agent service (optional, for testing)
+  # vigilon-agent:
+  #   build:
+  #     context: .
+  #     target: agent
+  #   image: vigilon-agent:latest
+  #   container_name: vigilon-agent
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ./configs/agent-config.yaml:/app/config.yaml:ro
+  #   environment:
+  #     - TZ=Europe/Istanbul
+  #   networks:
+  #     - vigilon-network
+  #   depends_on:
+  #     - vigilon-server
+
+volumes:
+  vigilon-data:
+    driver: local
+
+networks:
+  vigilon-network:
+    driver: bridge

@@ -1,0 +1,60 @@
+# Binaries
+vigilon-server
+vigilon-agent
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Configs with secrets
+configs/config.yaml
+!configs/config.example.yaml
+!configs/agent-config.example.yaml
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (exclude from image, but keep example configs)
+README.md
+INSTALL.md
+LICENSE
+
+# Docker files
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# CI/CD
+.github
+.gitlab-ci.yml
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/

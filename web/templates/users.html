@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1>Vigilon</h1>
+            <ul>
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/servers">Servers</a></li>
+                <li><a href="/alerts">Alerts</a></li>
+                <li><a href="/users" class="active">Users</a></li>
+                <li><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h2>User Management</h2>
+            <div>
+                <button class="btn" onclick="showRolesManagement()">Manage Roles</button>
+                <button class="btn" onclick="showAddUserModal()">Add User</button>
+            </div>
+        </div>
+
+        <div id="users-container">
+            <div class="loading">Loading users...</div>
+        </div>
+    </div>
+
+    <!-- User Add/Edit Modal -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3 id="modalTitle">Add New User</h3>
+            <form id="userForm">
+                <input type="hidden" id="userId">
+                <div class="form-group">
+                    <label for="username">Username: *</label>
+                    <input type="text" id="username" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email: *</label>
+                    <input type="email" id="email" class="form-input" required>
+                </div>
+                <div class="form-group" id="passwordGroup">
+                    <label for="password">Password: *</label>
+                    <input type="password" id="password" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label for="roleId">Role: *</label>
+                    <select id="roleId" class="form-input" required>
+                        <option value="">Select Role...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="enabled" checked>
+                        Enabled
+                    </label>
+                </div>
+                <button type="submit" class="btn">Save User</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3>Change Password</h3>
+            <form id="passwordForm">
+                <input type="hidden" id="passwordUserId">
+                <div class="form-group">
+                    <label for="currentPassword">New Password: *</label>
+                    <input type="password" id="newPassword" class="form-input" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password: *</label>
+                    <input type="password" id="confirmPassword" class="form-input" required minlength="6">
+                </div>
+                <button type="submit" class="btn">Change Password</button>
+            </form>
+        </div>
+    </div>    <!-- Change Password Modal -->
+        <!-- Change Password Modal -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3>Change Password</h3>
+            <form id="passwordForm">
+                <input type="hidden" id="passwordUserId">
+                <div class="form-group">
+                    <label for="newPassword">New Password: *</label>
+                    <input type="password" id="newPassword" class="form-input" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password: *</label>
+                    <input type="password" id="confirmPassword" class="form-input" required minlength="6">
+                </div>
+                <button type="submit" class="btn">Change Password</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Role Permissions Modal -->
+    <div id="rolePermissionsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3 id="rolePermissionsTitle">Role Permissions</h3>
+            <div id="rolePermissionsContent">
+                <div class="loading">Loading permissions...</div>
+            </div>
+            <div id="rolePermissionsActions" style="display: none; margin-top: 1rem; padding: 0 1rem 1rem;">
+                <button class="btn" onclick="editRolePermissions()">Edit Permissions</button>
+                <button class="btn" style="background: #95a5a6;" onclick="goBackToRolesManagement()">Back to Roles</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Role Permissions Modal -->
+    <div id="editRolePermissionsModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3 id="editRolePermissionsTitle">Edit Role Permissions</h3>
+            <form id="editRolePermissionsForm">
+                <input type="hidden" id="editRoleId">
+                <div id="editPermissionsContent">
+                    <div class="loading">Loading...</div>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <button type="submit" class="btn">Save Permissions</button>
+                    <button type="button" class="btn" style="background: #95a5a6;" onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Roles Management Modal -->
+    <div id="rolesManagementModal" class="modal">
+        <div class="modal-content" style="max-width: 1000px;">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <h3>Roles Management</h3>
+                <button class="btn" onclick="showAddRoleModal()">Add Role</button>
+            </div>
+            <div id="rolesManagementContent">
+                <div class="loading">Loading roles...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Role Modal -->
+    <div id="roleModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3 id="roleModalTitle">Add New Role</h3>
+            <form id="roleForm">
+                <input type="hidden" id="roleFormId">
+                <div class="form-group">
+                    <label for="roleName">Role Name (Internal): *</label>
+                    <input type="text" id="roleName" class="form-input" required placeholder="e.g., developer">
+                </div>
+                <div class="form-group">
+                    <label for="roleDisplayName">Display Name: *</label>
+                    <input type="text" id="roleDisplayName" class="form-input" required placeholder="e.g., Developer">
+                </div>
+                <div class="form-group">
+                    <label for="roleDescription">Description:</label>
+                    <textarea id="roleDescription" class="form-input" rows="3" placeholder="Role description..."></textarea>
+                </div>
+                <button type="submit" class="btn">Save Role</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/users.js"></script>
+</body>
+</html>
+
+
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/users.js"></script>
+</body>
+</html>

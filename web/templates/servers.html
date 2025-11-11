@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="container">
+            <h1>Vigilon</h1>
+            <ul>
+                <li><a href="/">Dashboard</a></li>
+                <li><a href="/servers" class="active">Servers</a></li>
+                <li><a href="/alerts">Alerts</a></li>
+                <li><a href="/users">Users</a></li>
+                <li><a href="#" onclick="logout()">Logout</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="page-header">
+            <h2>Servers</h2>
+            <button class="btn" onclick="showAddServerModal()">Add Server</button>
+        </div>
+
+        {{if not .Servers}}
+        <div class="empty-state">
+            <p>No servers configured.</p>
+        </div>
+        {{else}}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>IP Address</th>
+                    <th>OS</th>
+                    <th>Monitoring Mode</th>
+                    <th>Connection</th>
+                    <th>Status</th>
+                    <th>Last Seen</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Servers}}
+                <tr>
+                    <td><strong>{{.Name}}</strong></td>
+                    <td>{{.IPAddress}}</td>
+                    <td>{{.OS}}</td>
+                    <td>{{.MonitoringMode}}</td>
+                    <td>
+                        {{if eq .ConnectionStatus "connected"}}
+                        <span class="badge badge-success">Connected</span>
+                        {{else if eq .ConnectionStatus "idle"}}
+                        <span class="badge" style="background: #f39c12;">Idle</span>
+                        {{else if eq .ConnectionStatus "disconnected"}}
+                        <span class="badge badge-secondary">Disconnected</span>
+                        {{else}}
+                        <span class="badge" style="background: #95a5a6;">Not Connected</span>
+                        {{end}}
+                    </td>
+                    <td>
+                        <span class="badge {{if .Enabled}}badge-success{{else}}badge-secondary{{end}}">
+                            {{if .Enabled}}Enabled{{else}}Disabled{{end}}
+                        </span>
+                    </td>
+                    <td>
+                        {{if .LastSeen}}
+                        {{.LastSeen.Format "2006-01-02 15:04:05"}}
+                        {{else}}
+                        Never
+                        {{end}}
+                    </td>
+                    <td>
+                        <div class="table-actions">
+                            <a href="/server/{{.ID}}" class="btn btn-sm">Details</a>
+                            {{if eq .ConnectionStatus "connected"}}
+                            <button class="btn btn-sm" style="background: #e67e22; color: white;" onclick="disconnectServer({{.ID}})">Disconnect</button>
+                            {{end}}
+                            <button class="btn btn-sm btn-danger" onclick="deleteServer({{.ID}})">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{end}}
+    </div>
+
+    <div id="addServerModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h3>Add New Server</h3>
+
+            <form id="addServerForm">
+                <!-- Basic Information -->
+                <div class="form-group">
+                    <label>Server Name: *</label>
+                    <input type="text" name="name" required placeholder="my-server-1">
+                </div>
+
+                <div class="form-group">
+                    <label>Hostname:</label>
+                    <input type="text" name="hostname" placeholder="server.example.com">
+                </div>
+
+                <div class="form-group">
+                    <label>IP Address: *</label>
+                    <input type="text" name="ip_address" required placeholder="192.168.1.100">
+                </div>
+
+                <div class="form-group">
+                    <label>Port:</label>
+                    <input type="number" name="port" value="22" placeholder="22">
+                </div>
+
+                <div class="form-group">
+                    <label>Operating System: *</label>
+                    <select name="os" id="serverOS" required>
+                        <option value="linux">Linux</option>
+                        <option value="windows">Windows</option>
+                    </select>
+                </div>
+
+                <!-- Monitoring Mode -->
+                <div class="form-group">
+                    <label>Monitoring Mode: *</label>
+                    <select name="monitoring_mode" id="monitoringMode" required onchange="updateFormFields()">
+                        <option value="">-- Select Mode --</option>
+                        <option value="push">Push (Agent reports to server)</option>
+                        <option value="pull">Pull (SSH connection)</option>
+                        <option value="hybrid">Hybrid (SSH + local script)</option>
+                    </select>
+                </div>
+
+                <div class="info-box" id="modeInfo" style="display: none;">
+                    <p id="modeInfoText"></p>
+                </div>
+
+                <!-- Check Interval -->
+                <div class="form-group">
+                    <label>Check Interval (seconds):</label>
+                    <input type="number" name="check_interval" value="0" min="0" placeholder="0 = use default (30s)">
+                    <small style="color: #7f8c8d;">0 means use server default. Set custom interval if needed (e.g., 60, 180)</small>
+                </div>
+
+                <!-- Push Mode Fields -->
+                <div id="pushModeFields" class="form-section hidden">
+                    <h4 class="form-section-title">Push Mode Configuration</h4>
+
+                    <div class="form-group">
+                        <label>Agent Token:</label>
+                        <input type="text" name="agent_token" id="agentToken" placeholder="Leave empty to auto-generate">
+                        <button type="button" class="btn btn-sm" onclick="generateToken()" style="margin-top: 0.5rem;">Generate Token</button>
+                    </div>
+
+                    <div class="info-box">
+                        <p><strong>Next Steps:</strong></p>
+                        <p>After saving this server, go to the server details page to get the one-line installation command.</p>
+                    </div>
+                </div>
+
+                <!-- Pull/Hybrid Mode Fields -->
+                <div id="pullModeFields" class="form-section hidden">
+                    <h4 class="form-section-title">SSH Configuration</h4>
+
+                    <div class="form-group">
+                        <label>SSH User:</label>
+                        <input type="text" name="ssh_user" placeholder="root">
+                    </div>
+
+                    <div class="form-group">
+                        <label>SSH Key Path:</label>
+                        <input type="text" name="ssh_key_path" placeholder="/root/.ssh/id_rsa">
+                        <small style="color: #7f8c8d;">Path to private key on Vigilon server</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="useJumpHost" onchange="toggleJumpHost()">
+                            Use Jump Host / SSH Tunnel
+                        </label>
+                    </div>
+
+                    <div id="jumpHostFields" class="hidden" style="margin-left: 1.5rem; background: #f8f9fa; padding: 1rem; border-radius: 4px;">
+                        <h5 style="margin-bottom: 0.75rem;">Jump Host Configuration</h5>
+
+                        <div class="form-group">
+                            <label>Jump Host:</label>
+                            <input type="text" name="ssh_jump_host" placeholder="jump.example.com or 192.168.1.1">
+                            <small style="color: #7f8c8d;">Server to jump through (e.g., Tailscale node)</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Jump Host User:</label>
+                            <input type="text" name="ssh_jump_user" placeholder="admin">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Jump Host SSH Key:</label>
+                            <input type="text" name="ssh_jump_key_path" placeholder="/root/.ssh/jump_key">
+                            <small style="color: #7f8c8d;">Path to private key for jump host</small>
+                        </div>
+
+                        <div class="info-box">
+                            <p><strong>How it works:</strong> Vigilon will SSH to jump host first, then connect to the target server through it. Useful for servers behind NAT or in private networks.</p>
+                        </div>
+                    </div>
+
+                    <div class="info-box" style="margin-top: 1rem;">
+                        <p><strong>Setup SSH Access:</strong></p>
+                        <ol style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                            <li>Generate SSH key on Vigilon server if not exists</li>
+                            <li>Copy public key to target server's authorized_keys</li>
+                            <li>Test connection manually before adding here</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <!-- Options -->
+                <div class="form-section" style="border-top: 1px solid #ecf0f1; padding-top: 1rem; margin-top: 1rem;">
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="enabled" checked>
+                            Enabled
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" name="notify_telegram" checked>
+                            Send Telegram Notifications
+                        </label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn">Add Server</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/servers.js"></script>
+</body>
+</html>
