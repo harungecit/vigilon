@@ -14,12 +14,12 @@ build: server agent
 # Build server
 server:
 	@echo "Building server..."
-	go build -ldflags="-s -w" -o $(SERVER_BINARY) cmd/server/main.go
+	CGO_ENABLED=1 go build -ldflags="-s -w" -o $(SERVER_BINARY) cmd/server/main.go
 
 # Build agent
 agent:
 	@echo "Building agent..."
-	go build -ldflags="-s -w" -o $(AGENT_BINARY) cmd/agent/main.go
+	CGO_ENABLED=1 go build -ldflags="-s -w" -o $(AGENT_BINARY) cmd/agent/main.go
 
 # Run server
 run: server
@@ -32,9 +32,9 @@ test:
 # Clean build artifacts
 clean:
 	@echo "Cleaning..."
-	rm -f $(SERVER_BINARY) $(AGENT_BINARY)
-	rm -f vigilon-server-* vigilon-agent-*
-	rm -f *.db
+	/bin/rm -f $(SERVER_BINARY) $(AGENT_BINARY)
+	/bin/rm -f vigilon-server-* vigilon-agent-*
+	/bin/rm -f *.db
 
 # Build for multiple platforms
 build-all: build-linux build-windows build-arm
