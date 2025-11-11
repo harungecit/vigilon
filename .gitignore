@@ -1,14 +1,15 @@
-# Binaries
-vigilon-server
-vigilon-agent
-*.exe
+# Binaries (root level only)
+/vigilon-server
+/vigilon-agent
 *.exe~
 *.dll
 *.so
 *.dylib
 
-# Pre-compiled agent binaries (large files, use releases)
-web/static/bin/vigilon-agent-*
+# Build artifacts
+/vigilon-server-*
+/vigilon-agent-*
+!/web/static/bin/vigilon-agent-*
 
 # Test binary, built with `go test -c`
 *.test
