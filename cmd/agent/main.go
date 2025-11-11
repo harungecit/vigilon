@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -76,6 +78,16 @@ var (
 
 	// Cached service list from API
 	cachedServices []string
+	
+	// Reusable HTTP client with connection pooling
+	httpClient = &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        10,
+			MaxIdleConnsPerHost: 2,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
 )
 
 func main() {
@@ -91,6 +103,11 @@ func main() {
 	log.Printf("Server URL: %s", config.ServerURL)
 	log.Printf("Check interval: %v", config.CheckInterval)
 	log.Printf("Service refresh interval: %v", config.ServiceRefreshInterval)
+
+	// Set GOMAXPROCS for better resource usage
+	if runtime.NumCPU() > 2 {
+		runtime.GOMAXPROCS(2) // Limit to 2 cores for agent
+	}
 
 	// Fetch initial service list from API
 	if err := refreshServiceList(config); err != nil {
@@ -117,6 +134,10 @@ func main() {
 	refreshTicker := time.NewTicker(config.ServiceRefreshInterval)
 	defer refreshTicker.Stop()
 
+	// Manual GC trigger every 10 minutes to prevent memory buildup
+	gcTicker := time.NewTicker(10 * time.Minute)
+	defer gcTicker.Stop()
+
 	for {
 		select {
 		case <-checkTicker.C:
@@ -127,6 +148,8 @@ func main() {
 			if err := refreshServiceList(config); err != nil {
 				log.Printf("Failed to refresh service list: %v", err)
 			}
+		case <-gcTicker.C:
+			runtime.GC() // Force garbage collection
 		}
 	}
 }
@@ -158,11 +181,22 @@ func loadConfig(path string) (*AgentConfig, error) {
 func refreshServiceList(config *AgentConfig) error {
 	url := fmt.Sprintf("%s/api/agent/services?token=%s", config.ServerURL, config.Token)
 
-	resp, err := http.Get(url)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to fetch service list: %w", err)
 	}
 	defer resp.Body.Close()
+	
+	// Drain and close response body to reuse connection
+	defer io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server returned status %d", resp.StatusCode)
@@ -174,7 +208,7 @@ func refreshServiceList(config *AgentConfig) error {
 	}
 
 	// Extract service names from enabled services
-	newServices := make([]string, 0)
+	newServices := make([]string, 0, len(serviceList.Services))
 	for _, service := range serviceList.Services {
 		if service.Enabled {
 			newServices = append(newServices, service.Name)
@@ -215,7 +249,7 @@ func checkAndReport(config *AgentConfig) error {
 
 	report := AgentReport{
 		Token:    config.Token,
-		Services: make([]ServiceReport, 0),
+		Services: make([]ServiceReport, 0, len(cachedServices)),
 	}
 
 	for _, serviceName := range cachedServices {
@@ -387,11 +421,23 @@ func sendReport(serverURL string, report AgentReport) error {
 		return fmt.Errorf("failed to marshal report: %w", err)
 	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send report: %w", err)
 	}
 	defer resp.Body.Close()
+	
+	// Drain and close response body to reuse connection
+	defer io.Copy(io.Discard, resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server returned status %d", resp.StatusCode)
