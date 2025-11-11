@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/harungecit/vigilon/internal/models"
+	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -208,13 +208,13 @@ func (db *DB) initSchema() error {
 	var columnExists int
 	checkQuery := `SELECT COUNT(*) FROM pragma_table_info('alerts') WHERE name='archived'`
 	db.conn.QueryRow(checkQuery).Scan(&columnExists)
-	
+
 	if columnExists == 0 {
 		// Column doesn't exist, add it
 		db.conn.Exec(`ALTER TABLE alerts ADD COLUMN archived BOOLEAN DEFAULT 0;`)
 		db.conn.Exec(`ALTER TABLE alerts ADD COLUMN archived_at DATETIME;`)
 	}
-	
+
 	// Create index for archived column (will be ignored if already exists)
 	db.conn.Exec(`CREATE INDEX IF NOT EXISTS idx_alerts_archived ON alerts(archived);`)
 
@@ -245,31 +245,31 @@ func (db *DB) initializeAuthDefaults() error {
 		{"servers.edit", "Edit Servers", "Modify server settings", "servers"},
 		{"servers.delete", "Delete Servers", "Remove servers", "servers"},
 		{"servers.toggle", "Enable/Disable Servers", "Enable or disable server monitoring", "servers"},
-		
+
 		// Service permissions
 		{"services.view", "View Services", "View service list and details", "services"},
 		{"services.create", "Create Services", "Add new services", "services"},
 		{"services.edit", "Edit Services", "Modify service settings", "services"},
 		{"services.delete", "Delete Services", "Remove services", "services"},
 		{"services.toggle", "Enable/Disable Services", "Enable or disable service monitoring", "services"},
-		
+
 		// Alert permissions
 		{"alerts.view", "View Alerts", "View alerts", "alerts"},
 		{"alerts.acknowledge", "Acknowledge Alerts", "Acknowledge alerts", "alerts"},
 		{"alerts.archive", "Archive Alerts", "Archive alerts", "alerts"},
-		
+
 		// User permissions
 		{"users.view", "View Users", "View user list", "users"},
 		{"users.create", "Create Users", "Add new users", "users"},
 		{"users.edit", "Edit Users", "Modify user settings", "users"},
 		{"users.delete", "Delete Users", "Remove users", "users"},
-		
+
 		// Role permissions
 		{"roles.view", "View Roles", "View role list", "roles"},
 		{"roles.create", "Create Roles", "Add new roles", "roles"},
 		{"roles.edit", "Edit Roles", "Modify role settings", "roles"},
 		{"roles.delete", "Delete Roles", "Remove roles", "roles"},
-		
+
 		// Settings permissions
 		{"settings.view", "View Settings", "View system settings", "settings"},
 		{"settings.edit", "Edit Settings", "Modify system settings", "settings"},
@@ -330,12 +330,12 @@ func (db *DB) initializeAuthDefaults() error {
 	if err != nil {
 		return fmt.Errorf("failed to hash default password: %w", err)
 	}
-	
+
 	_, err = db.conn.Exec(`
 		INSERT INTO users (username, email, password_hash, role_id, enabled)
 		VALUES (?, ?, ?, ?, ?)
 	`, "root", "root@vigilon.local", string(passwordHash), 1, true)
-	
+
 	if err != nil {
 		return fmt.Errorf("failed to create default admin user: %w", err)
 	}
@@ -859,15 +859,15 @@ func (db *DB) DeleteUser(id int) error {
 		JOIN roles r ON u.role_id = r.id
 		WHERE u.id = ?
 	`, id).Scan(&isSuperAdmin)
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	if isSuperAdmin {
 		return fmt.Errorf("cannot delete super admin user")
 	}
-	
+
 	query := `DELETE FROM users WHERE id = ?`
 	_, err = db.conn.Exec(query, id)
 	return err
@@ -904,13 +904,13 @@ func (db *DB) GetRole(id int) (*models.Role, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Load permissions
 	permissions, err := db.GetRolePermissions(id)
 	if err == nil {
 		role.Permissions = permissions
 	}
-	
+
 	return role, nil
 }
 
@@ -1069,13 +1069,13 @@ func (db *DB) GetSessionByToken(token string) (*models.Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Check if expired
 	if time.Now().After(session.ExpiresAt) {
 		db.DeleteSession(session.ID)
 		return nil, fmt.Errorf("session expired")
 	}
-	
+
 	return session, nil
 }
 

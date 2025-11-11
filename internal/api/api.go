@@ -18,10 +18,10 @@ import (
 
 // API handles HTTP requests
 type API struct {
-	db         *database.DB
-	router     *mux.Router
-	templates  *template.Template
-	telegram   *telegram.Notifier
+	db             *database.DB
+	router         *mux.Router
+	templates      *template.Template
+	telegram       *telegram.Notifier
 	authMiddleware *auth.Middleware
 }
 
@@ -58,10 +58,10 @@ func (a *API) setupRoutes() {
 	a.router.HandleFunc("/login", a.handleLoginPage).Methods("GET")
 	a.router.HandleFunc("/api/auth/login", a.handleLogin).Methods("POST")
 	a.router.HandleFunc("/api/auth/logout", a.handleLogout).Methods("POST")
-	
+
 	// One-line installer (no auth)
 	a.router.HandleFunc("/install.sh", a.handleInstallScript).Methods("GET")
-	
+
 	// Agent endpoints (no session auth, uses token)
 	a.router.HandleFunc("/api/agent/report", a.handleAgentReport).Methods("POST")
 	a.router.HandleFunc("/api/agent/install-script", a.handleAgentInstallScript).Methods("POST")
@@ -131,7 +131,7 @@ func (a *API) setupRoutes() {
 	a.router.Handle("/api/users/{id}", a.authMiddleware.RequireAuthAPI(
 		a.authMiddleware.RequirePermissionAPI("users.delete")(http.HandlerFunc(a.handleDeleteUser)))).Methods("DELETE")
 	a.router.Handle("/api/users/{id}/password", a.authMiddleware.RequireAuthAPI(http.HandlerFunc(a.handleChangePassword))).Methods("PUT")
-	
+
 	// Protected API routes - Roles
 	a.router.Handle("/api/roles", a.authMiddleware.RequireAuthAPI(
 		a.authMiddleware.RequirePermissionAPI("roles.view")(http.HandlerFunc(a.handleGetRoles)))).Methods("GET")
@@ -536,18 +536,18 @@ func (a *API) handleUnarchiveAlert(w http.ResponseWriter, r *http.Request) {
 // API Handlers - Agent
 
 type AgentReport struct {
-	Token    string                  `json:"token"`
-	Services []AgentServiceReport    `json:"services"`
+	Token    string               `json:"token"`
+	Services []AgentServiceReport `json:"services"`
 }
 
 type AgentServiceReport struct {
-	Name         string                `json:"name"`
-	Status       models.ServiceStatus  `json:"status"`
-	ErrorMessage string                `json:"error_message,omitempty"`
-	PID          int                   `json:"pid,omitempty"`
-	Memory       int64                 `json:"memory_kb,omitempty"`
-	CPU          float64               `json:"cpu_percent,omitempty"`
-	Uptime       int64                 `json:"uptime_seconds,omitempty"`
+	Name         string               `json:"name"`
+	Status       models.ServiceStatus `json:"status"`
+	ErrorMessage string               `json:"error_message,omitempty"`
+	PID          int                  `json:"pid,omitempty"`
+	Memory       int64                `json:"memory_kb,omitempty"`
+	CPU          float64              `json:"cpu_percent,omitempty"`
+	Uptime       int64                `json:"uptime_seconds,omitempty"`
 }
 
 func (a *API) handleAgentReport(w http.ResponseWriter, r *http.Request) {
@@ -632,13 +632,14 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
 }
+
 // handleAgentInstallScript generates an installation script for the agent
 func (a *API) handleAgentInstallScript(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ServerURL  string `json:"server_url"`
-		Token      string `json:"token"`
-		OS         string `json:"os"`
-		Arch       string `json:"arch"`
+		ServerURL string `json:"server_url"`
+		Token     string `json:"token"`
+		OS        string `json:"os"`
+		Arch      string `json:"arch"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1268,7 +1269,7 @@ func (a *API) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	currentUser := auth.GetUserFromContext(r.Context())
-	
+
 	// Users can only change their own password unless they're admin
 	if currentUser.ID != id && !currentUser.Role.IsSuperAdmin {
 		respondJSON(w, http.StatusForbidden, map[string]string{"error": "Forbidden"})
@@ -1489,4 +1490,3 @@ func (a *API) handleDeleteRole(w http.ResponseWriter, r *http.Request) {
 
 	respondJSON(w, http.StatusOK, map[string]string{"message": "Role deleted successfully"})
 }
-

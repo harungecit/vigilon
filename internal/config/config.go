@@ -5,17 +5,17 @@ import (
 	"os"
 	"time"
 
-	"gopkg.in/yaml.v3"
 	"github.com/harungecit/vigilon/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 // AppConfig represents the application configuration
 type AppConfig struct {
-	Server    ServerConfig              `yaml:"server"`
-	Database  DatabaseConfig            `yaml:"database"`
-	Telegram  models.TelegramConfig     `yaml:"telegram"`
-	Monitoring MonitoringConfig         `yaml:"monitoring"`
-	Servers   []ServerDefinition        `yaml:"servers"`
+	Server     ServerConfig          `yaml:"server"`
+	Database   DatabaseConfig        `yaml:"database"`
+	Telegram   models.TelegramConfig `yaml:"telegram"`
+	Monitoring MonitoringConfig      `yaml:"monitoring"`
+	Servers    []ServerDefinition    `yaml:"servers"`
 }
 
 type ServerConfig struct {
@@ -28,24 +28,24 @@ type DatabaseConfig struct {
 }
 
 type MonitoringConfig struct {
-	CheckInterval    time.Duration `yaml:"check_interval"`
-	RetentionDays    int           `yaml:"retention_days"`
-	AlertCooldown    time.Duration `yaml:"alert_cooldown"`
+	CheckInterval time.Duration `yaml:"check_interval"`
+	RetentionDays int           `yaml:"retention_days"`
+	AlertCooldown time.Duration `yaml:"alert_cooldown"`
 }
 
 type ServerDefinition struct {
-	Name           string                  `yaml:"name"`
-	Hostname       string                  `yaml:"hostname"`
-	IPAddress      string                  `yaml:"ip_address"`
-	Port           int                     `yaml:"port"`
-	OS             string                  `yaml:"os"`
-	MonitoringMode models.MonitoringMode   `yaml:"monitoring_mode"`
-	SSHUser        string                  `yaml:"ssh_user,omitempty"`
-	SSHKeyPath     string                  `yaml:"ssh_key_path,omitempty"`
-	AgentToken     string                  `yaml:"agent_token,omitempty"`
-	Enabled        bool                    `yaml:"enabled"`
-	NotifyTelegram bool                    `yaml:"notify_telegram"`
-	Services       []ServiceDefinition     `yaml:"services"`
+	Name           string                `yaml:"name"`
+	Hostname       string                `yaml:"hostname"`
+	IPAddress      string                `yaml:"ip_address"`
+	Port           int                   `yaml:"port"`
+	OS             string                `yaml:"os"`
+	MonitoringMode models.MonitoringMode `yaml:"monitoring_mode"`
+	SSHUser        string                `yaml:"ssh_user,omitempty"`
+	SSHKeyPath     string                `yaml:"ssh_key_path,omitempty"`
+	AgentToken     string                `yaml:"agent_token,omitempty"`
+	Enabled        bool                  `yaml:"enabled"`
+	NotifyTelegram bool                  `yaml:"notify_telegram"`
+	Services       []ServiceDefinition   `yaml:"services"`
 }
 
 type ServiceDefinition struct {

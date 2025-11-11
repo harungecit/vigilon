@@ -1,11 +1,11 @@
 module github.com/harungecit/vigilon
 
-go 1.23
+go 1.24.0
 
 require (
 	github.com/gorilla/mux v1.8.1
-	github.com/mattn/go-sqlite3 v1.14.18
-	gopkg.in/telebot.v3 v3.2.1
+	github.com/mattn/go-sqlite3 v1.14.32
+	gopkg.in/telebot.v3 v3.3.8
 	gopkg.in/yaml.v3 v3.0.1
 )
 

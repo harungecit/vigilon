@@ -124,7 +124,7 @@ Go to GitHub → Actions → Docker Build and Push → Run workflow
 ### Updating Go Version
 Edit all three workflow files and change:
 ```yaml
-go-version: '1.23'
+go-version: '1.24'
 ```
 
 ### Adding New Platforms

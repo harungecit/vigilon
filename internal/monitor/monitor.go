@@ -20,7 +20,7 @@ type Monitor struct {
 	mu            sync.RWMutex
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
-	maxWorkers    int // Maximum concurrent workers
+	maxWorkers    int           // Maximum concurrent workers
 	workerSem     chan struct{} // Semaphore for limiting workers
 }
 

@@ -98,7 +98,7 @@ func (m *Middleware) RequireAuthAPI(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Check for session token in cookie or Authorization header
 		var token string
-		
+
 		// Try cookie first
 		cookie, err := r.Cookie("session_token")
 		if err == nil {

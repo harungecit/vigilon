@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	tele "gopkg.in/telebot.v3"
 	"github.com/harungecit/vigilon/internal/database"
 	"github.com/harungecit/vigilon/internal/models"
+	tele "gopkg.in/telebot.v3"
 )
 
 // Notifier handles Telegram notifications

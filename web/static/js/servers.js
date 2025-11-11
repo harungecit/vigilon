@@ -17,14 +17,14 @@ function updateFormFields() {
     modeInfo.style.display = 'none';
 
     // Show relevant fields based on mode
-    if (pushMode) {
+    if (mode === 'push') {
+        pushFields.classList.remove('hidden');
+        modeInfo.style.display = 'block';
         modeInfoText.innerHTML = '<strong>Push Mode:</strong> Lightweight agent runs on target server and reports status to Vigilon. No SSH required. Best for servers behind NAT or firewalls.';
-        pushFields.style.display = 'block';
-        pullFields.style.display = 'none';
-    } else {
+    } else if (mode === 'pull') {
+        pullFields.classList.remove('hidden');
+        modeInfo.style.display = 'block';
         modeInfoText.innerHTML = '<strong>Pull Mode:</strong> Vigilon connects to target server via SSH to check service status. Requires SSH access and credentials.';
-        pushFields.style.display = 'none';
-        pullFields.style.display = 'block';
     } else if (mode === 'hybrid') {
         pullFields.classList.remove('hidden');
         modeInfo.style.display = 'block';

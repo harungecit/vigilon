@@ -19,11 +19,11 @@ import (
 
 // AgentConfig represents the agent configuration
 type AgentConfig struct {
-	ServerURL            string        `yaml:"server_url"`
-	Token                string        `yaml:"token"`
-	CheckInterval        time.Duration `yaml:"check_interval"`
+	ServerURL              string        `yaml:"server_url"`
+	Token                  string        `yaml:"token"`
+	CheckInterval          time.Duration `yaml:"check_interval"`
 	ServiceRefreshInterval time.Duration `yaml:"service_refresh_interval"`
-	Services             []string      `yaml:"services"` // Optional fallback if API fetch fails
+	Services               []string      `yaml:"services"` // Optional fallback if API fetch fails
 }
 
 // ServiceListResponse represents the API response for service list

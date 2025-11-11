@@ -204,11 +204,11 @@ func (c *SSHChecker) buildSSHCommand() []string {
 	cmd = append(cmd,
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "ConnectTimeout=5",        // Reduced from 10
-		"-o", "ServerAliveInterval=5",   // Send keepalive every 5s
-		"-o", "ServerAliveCountMax=2",   // Disconnect after 2 failed keepalives
-		"-o", "ConnectionAttempts=1",    // Don't retry
-		"-o", "BatchMode=yes",           // Never ask for password
+		"-o", "ConnectTimeout=5", // Reduced from 10
+		"-o", "ServerAliveInterval=5", // Send keepalive every 5s
+		"-o", "ServerAliveCountMax=2", // Disconnect after 2 failed keepalives
+		"-o", "ConnectionAttempts=1", // Don't retry
+		"-o", "BatchMode=yes", // Never ask for password
 		"-p", strconv.Itoa(c.server.Port),
 	)
 

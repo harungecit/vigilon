@@ -70,31 +70,31 @@ type Service struct {
 
 // ServiceCheck represents a monitoring check result
 type ServiceCheck struct {
-	ID            int           `json:"id"`
-	ServiceID     int           `json:"service_id"`
-	Status        ServiceStatus `json:"status"`
-	ResponseTime  int64         `json:"response_time_ms"` // in milliseconds
-	ErrorMessage  string        `json:"error_message,omitempty"`
-	CheckedAt     time.Time     `json:"checked_at"`
-	PID           int           `json:"pid,omitempty"`
-	Memory        int64         `json:"memory_kb,omitempty"` // in KB
-	CPU           float64       `json:"cpu_percent,omitempty"`
-	Uptime        int64         `json:"uptime_seconds,omitempty"`
+	ID           int           `json:"id"`
+	ServiceID    int           `json:"service_id"`
+	Status       ServiceStatus `json:"status"`
+	ResponseTime int64         `json:"response_time_ms"` // in milliseconds
+	ErrorMessage string        `json:"error_message,omitempty"`
+	CheckedAt    time.Time     `json:"checked_at"`
+	PID          int           `json:"pid,omitempty"`
+	Memory       int64         `json:"memory_kb,omitempty"` // in KB
+	CPU          float64       `json:"cpu_percent,omitempty"`
+	Uptime       int64         `json:"uptime_seconds,omitempty"`
 }
 
 // Alert represents a notification sent
 type Alert struct {
-	ID           int           `json:"id"`
-	ServiceID    int           `json:"service_id"`
-	ServerID     int           `json:"server_id"`
-	Status       ServiceStatus `json:"status"`
-	Message      string        `json:"message"`
-	SentVia      string        `json:"sent_via"` // telegram, email, etc.
-	Acknowledged bool          `json:"acknowledged"`
-	Archived     bool          `json:"archived"`
-	CreatedAt    time.Time     `json:"created_at"`
-	AcknowledgedAt *time.Time  `json:"acknowledged_at,omitempty"`
-	ArchivedAt   *time.Time    `json:"archived_at,omitempty"`
+	ID             int           `json:"id"`
+	ServiceID      int           `json:"service_id"`
+	ServerID       int           `json:"server_id"`
+	Status         ServiceStatus `json:"status"`
+	Message        string        `json:"message"`
+	SentVia        string        `json:"sent_via"` // telegram, email, etc.
+	Acknowledged   bool          `json:"acknowledged"`
+	Archived       bool          `json:"archived"`
+	CreatedAt      time.Time     `json:"created_at"`
+	AcknowledgedAt *time.Time    `json:"acknowledged_at,omitempty"`
+	ArchivedAt     *time.Time    `json:"archived_at,omitempty"`
 }
 
 // Config represents application configuration
@@ -114,29 +114,29 @@ type TelegramConfig struct {
 
 // User represents a system user
 type User struct {
-	ID           int       `json:"id"`
-	Username     string    `json:"username"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"` // Never send password hash to client
-	RoleID       int       `json:"role_id"`
-	Role         *Role     `json:"role,omitempty"`
-	Enabled      bool      `json:"enabled"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           int        `json:"id"`
+	Username     string     `json:"username"`
+	Email        string     `json:"email"`
+	PasswordHash string     `json:"-"` // Never send password hash to client
+	RoleID       int        `json:"role_id"`
+	Role         *Role      `json:"role,omitempty"`
+	Enabled      bool       `json:"enabled"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
 }
 
 // Role represents a user role with permissions
 type Role struct {
-	ID          int          `json:"id"`
-	Name        string       `json:"name"`
-	DisplayName string       `json:"display_name"`
-	Description string       `json:"description"`
-	IsSuperAdmin bool        `json:"is_super_admin"` // Super admin cannot be deleted
-	IsSystem    bool         `json:"is_system"`      // System roles cannot be modified
-	Permissions []Permission `json:"permissions,omitempty"`
-	CreatedAt   time.Time    `json:"created_at"`
-	UpdatedAt   time.Time    `json:"updated_at"`
+	ID           int          `json:"id"`
+	Name         string       `json:"name"`
+	DisplayName  string       `json:"display_name"`
+	Description  string       `json:"description"`
+	IsSuperAdmin bool         `json:"is_super_admin"` // Super admin cannot be deleted
+	IsSystem     bool         `json:"is_system"`      // System roles cannot be modified
+	Permissions  []Permission `json:"permissions,omitempty"`
+	CreatedAt    time.Time    `json:"created_at"`
+	UpdatedAt    time.Time    `json:"updated_at"`
 }
 
 // Permission represents an action that can be performed
