@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0, v1.1.0, etc.
+
+permissions:
+  contents: write  # Required to create releases
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+      
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
+      - name: Build Server Binary (Linux AMD64)
+        run: |
+          GOOS=linux GOARCH=amd64 go build \
+            -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" \
+            -o vigilon-server-linux-amd64 \
+            cmd/server/main.go
+      
+      - name: Build Agent Binaries
+        run: |
+          # Linux AMD64
+          GOOS=linux GOARCH=amd64 go build \
+            -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" \
+            -o vigilon-agent-linux-amd64 \
+            cmd/agent/main.go
+          
+          # Linux ARM64 (Raspberry Pi)
+          GOOS=linux GOARCH=arm64 go build \
+            -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" \
+            -o vigilon-agent-linux-arm64 \
+            cmd/agent/main.go
+          
+          # Windows AMD64
+          GOOS=windows GOARCH=amd64 go build \
+            -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" \
+            -o vigilon-agent-windows-amd64.exe \
+            cmd/agent/main.go
+      
+      - name: Generate SHA256 Checksums
+        run: |
+          sha256sum vigilon-server-linux-amd64 > checksums.txt
+          sha256sum vigilon-agent-linux-amd64 >> checksums.txt
+          sha256sum vigilon-agent-linux-arm64 >> checksums.txt
+          sha256sum vigilon-agent-windows-amd64.exe >> checksums.txt
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: RELEASE_NOTES.md
+          files: |
+            vigilon-server-linux-amd64
+            vigilon-agent-linux-amd64
+            vigilon-agent-linux-arm64
+            vigilon-agent-windows-amd64.exe
+            checksums.txt
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Update static binaries in repository
+        run: |
+          mkdir -p web/static/bin
+          cp vigilon-agent-linux-amd64 web/static/bin/
+          cp vigilon-agent-linux-arm64 web/static/bin/
+          cp vigilon-agent-windows-amd64.exe web/static/bin/
+      
+      - name: Commit updated binaries
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add web/static/bin/
+          git diff --staged --quiet || git commit -m "chore: Update agent binaries for ${{ steps.get_version.outputs.VERSION }}"
+          git push origin HEAD:main

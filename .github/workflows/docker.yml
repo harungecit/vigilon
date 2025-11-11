@@ -1,0 +1,104 @@
+name: Docker Build and Push
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME_SERVER: harungecit/vigilon-server
+  IMAGE_NAME_AGENT: harungecit/vigilon-agent
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      
+      - name: Extract metadata for Server
+        id: meta-server
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME_SERVER }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Extract metadata for Agent
+        id: meta-agent
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME_AGENT }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=ref,event=branch
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push Server image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          target: server
+          push: true
+          tags: ${{ steps.meta-server.outputs.tags }}
+          labels: ${{ steps.meta-server.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME_SERVER }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME_SERVER }}:buildcache,mode=max
+          platforms: linux/amd64,linux/arm64
+      
+      - name: Build and push Agent image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          target: agent
+          push: true
+          tags: ${{ steps.meta-agent.outputs.tags }}
+          labels: ${{ steps.meta-agent.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.IMAGE_NAME_AGENT }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE_NAME_AGENT }}:buildcache,mode=max
+          platforms: linux/amd64,linux/arm64
+      
+      - name: Docker Hub Description - Server
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: ${{ env.IMAGE_NAME_SERVER }}
+          short-description: "Vigilon Server - Multi-platform service monitoring system"
+          readme-filepath: ./README.md
+      
+      - name: Docker Hub Description - Agent
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: ${{ env.IMAGE_NAME_AGENT }}
+          short-description: "Vigilon Agent - Lightweight monitoring agent"
+          readme-filepath: ./README.md
