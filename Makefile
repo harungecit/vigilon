@@ -37,21 +37,22 @@ clean:
 	/bin/rm -f *.db
 
 # Build for multiple platforms
+# Build for multiple platforms
 build-all: build-linux build-windows build-arm
 
 build-linux:
 	@echo "Building for Linux (amd64)..."
-	GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o $(SERVER_BINARY)-linux-amd64 cmd/server/main.go
-	GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o $(AGENT_BINARY)-linux-amd64 cmd/agent/main.go
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o $(SERVER_BINARY)-linux-amd64 cmd/server/main.go
+	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o $(AGENT_BINARY)-linux-amd64 cmd/agent/main.go
 
 build-windows:
 	@echo "Building for Windows (amd64)..."
-	GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o $(SERVER_BINARY)-windows-amd64.exe cmd/server/main.go
-	GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o $(AGENT_BINARY)-windows-amd64.exe cmd/agent/main.go
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc go build -ldflags="-s -w" -o $(SERVER_BINARY)-windows-amd64.exe cmd/server/main.go
+	CGO_ENABLED=1 GOOS=windows GOARCH=amd64 CC=x86_64-w64-mingw32-gcc go build -ldflags="-s -w" -o $(AGENT_BINARY)-windows-amd64.exe cmd/agent/main.go
 
 build-arm:
 	@echo "Building for ARM (Raspberry Pi)..."
-	GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o $(AGENT_BINARY)-linux-arm64 cmd/agent/main.go
+	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc go build -ldflags="-s -w" -o $(AGENT_BINARY)-linux-arm64 cmd/agent/main.go
 
 # Install dependencies
 deps:
