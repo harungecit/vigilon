@@ -20,7 +20,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.24'
+          go-version: '1.23'
+      
+      - name: Install GCC (for CGO/SQLite)
+        run: sudo apt-get update && sudo apt-get install -y gcc
       
       - name: Get version from tag
         id: get_version
@@ -28,7 +31,7 @@ jobs:
       
       - name: Build Server Binary (Linux AMD64)
         run: |
-          GOOS=linux GOARCH=amd64 go build \
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build \
             -ldflags="-s -w -X main.version=${{ steps.get_version.outputs.VERSION }}" \
             -o vigilon-server-linux-amd64 \
             cmd/server/main.go

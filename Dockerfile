@@ -1,9 +1,9 @@
 # Multi-stage Dockerfile for Vigilon Server and Agent
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
-# Install build dependencies
-RUN apk add --no-cache git make
+# Install build dependencies (gcc and musl-dev for CGO/SQLite)
+RUN apk add --no-cache git make gcc musl-dev
 
 WORKDIR /build
 
@@ -14,8 +14,10 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build server and agent
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o vigilon-server cmd/server/main.go
+# Build server with CGO enabled (required for SQLite)
+RUN CGO_ENABLED=1 GOOS=linux go build -a -ldflags="-w -s" -o vigilon-server cmd/server/main.go
+
+# Build agent without CGO
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags="-w -s" -o vigilon-agent cmd/agent/main.go
 
 # Server runtime stage
