@@ -9,13 +9,35 @@
 <body>
     <nav class="navbar">
         <div class="container">
-            <h1>Vigilon</h1>
+            <h1><a href="/" style="color: white; text-decoration: none;">Vigilon</a></h1>
             <ul>
                 <li><a href="/">Dashboard</a></li>
+                {{if or (eq .User.Role.Name "Super Admin") (.User.Role.IsSuperAdmin)}}
                 <li><a href="/servers" class="active">Servers</a></li>
                 <li><a href="/alerts">Alerts</a></li>
                 <li><a href="/users">Users</a></li>
-                <li><a href="#" onclick="logout()">Logout</a></li>
+                {{else}}
+                    {{range .User.Role.Permissions}}
+                        {{if eq .Name "servers.view"}}
+                <li><a href="/servers" class="active">Servers</a></li>
+                        {{end}}
+                        {{if eq .Name "alerts.view"}}
+                <li><a href="/alerts">Alerts</a></li>
+                        {{end}}
+                        {{if eq .Name "users.view"}}
+                <li><a href="/users">Users</a></li>
+                        {{end}}
+                    {{end}}
+                {{end}}
+                <li class="user-dropdown">
+                    <a href="#" onclick="toggleUserMenu(event)" class="user-menu-trigger">
+                        {{.User.Username}} ▾
+                    </a>
+                    <div id="userDropdown" class="dropdown-content">
+                        <a href="#" onclick="showChangePasswordModal()">Change Password</a>
+                        <a href="#" onclick="logout()">Logout</a>
+                    </div>
+                </li>
             </ul>
         </div>
     </nav>
@@ -44,14 +66,14 @@
                     <th>Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="serversTableBody">
                 {{range .Servers}}
-                <tr>
+                <tr data-server-id="{{.ID}}">
                     <td><strong>{{.Name}}</strong></td>
                     <td>{{.IPAddress}}</td>
                     <td>{{.OS}}</td>
                     <td>{{.MonitoringMode}}</td>
-                    <td>
+                    <td class="connection-status">
                         {{if eq .ConnectionStatus "connected"}}
                         <span class="badge badge-success">Connected</span>
                         {{else if eq .ConnectionStatus "idle"}}
@@ -62,12 +84,12 @@
                         <span class="badge" style="background: #95a5a6;">Not Connected</span>
                         {{end}}
                     </td>
-                    <td>
+                    <td class="server-enabled-status">
                         <span class="badge {{if .Enabled}}badge-success{{else}}badge-secondary{{end}}">
                             {{if .Enabled}}Enabled{{else}}Disabled{{end}}
                         </span>
                     </td>
-                    <td>
+                    <td class="last-seen">
                         {{if .LastSeen}}
                         {{.LastSeen.Format "2006-01-02 15:04:05"}}
                         {{else}}
@@ -242,7 +264,69 @@
         </div>
     </div>
 
+    <script src="/static/js/sse.js"></script>
     <script src="/static/js/main.js"></script>
     <script src="/static/js/servers.js"></script>
+    <script>
+        // SSE for servers list
+        autoRefresh = false;
+        const sseClient = new SSEClient('/api/sse/servers');
+        
+        sseClient.on('servers_update', (data) => {
+            updateServersTable(data);
+        });
+
+        sseClient.connect();
+
+        function updateServersTable(serversData) {
+            serversData.forEach(server => {
+                const row = document.querySelector(`tr[data-server-id="${server.server_id}"]`);
+                if (!row) return;
+
+                // Update connection status
+                const connCell = row.querySelector('.connection-status');
+                if (connCell) {
+                    let badgeClass = 'badge-secondary';
+                    let badgeText = 'Not Connected';
+                    let badgeStyle = '';
+                    
+                    if (server.connection_status === 'connected') {
+                        badgeClass = 'badge-success';
+                        badgeText = 'Connected';
+                    } else if (server.connection_status === 'idle') {
+                        badgeClass = 'badge';
+                        badgeText = 'Idle';
+                        badgeStyle = 'background: #f39c12;';
+                    } else if (server.connection_status === 'disconnected') {
+                        badgeClass = 'badge-secondary';
+                        badgeText = 'Disconnected';
+                    }
+                    
+                    connCell.innerHTML = `<span class="badge ${badgeClass}" style="${badgeStyle}">${badgeText}</span>`;
+                }
+
+                // Update enabled status
+                const enabledCell = row.querySelector('.server-enabled-status');
+                if (enabledCell) {
+                    const badgeClass = server.enabled ? 'badge-success' : 'badge-secondary';
+                    const badgeText = server.enabled ? 'Enabled' : 'Disabled';
+                    enabledCell.innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span>`;
+                }
+
+                // Update last seen
+                const lastSeenCell = row.querySelector('.last-seen');
+                if (lastSeenCell && server.last_seen) {
+                    const d = new Date(server.last_seen);
+                    lastSeenCell.textContent = d.toLocaleString();
+                } else if (lastSeenCell) {
+                    lastSeenCell.textContent = 'Never';
+                }
+            });
+        }
+
+        window.addEventListener('beforeunload', () => {
+            sseClient.disconnect();
+        });
+    </script>
 </body>
 </html>

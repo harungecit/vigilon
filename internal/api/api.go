@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -13,6 +14,7 @@ import (
 	"github.com/harungecit/vigilon/internal/auth"
 	"github.com/harungecit/vigilon/internal/database"
 	"github.com/harungecit/vigilon/internal/models"
+	"github.com/harungecit/vigilon/internal/sse"
 	"github.com/harungecit/vigilon/internal/telegram"
 )
 
@@ -23,6 +25,7 @@ type API struct {
 	templates      *template.Template
 	telegram       *telegram.Notifier
 	authMiddleware *auth.Middleware
+	sseManager     *sse.Manager
 }
 
 // New creates a new API instance
@@ -32,7 +35,14 @@ func New(db *database.DB, telegramNotifier *telegram.Notifier) *API {
 		router:         mux.NewRouter(),
 		telegram:       telegramNotifier,
 		authMiddleware: auth.NewMiddleware(db),
+		sseManager:     sse.NewManager(),
 	}
+
+	// Start SSE manager
+	go api.sseManager.Start(context.Background())
+	
+	// Setup SSE broadcaster
+	api.sseManager.SetBroadcaster(api.sseBroadcaster)
 
 	// Load templates
 	api.loadTemplates()
@@ -67,13 +77,24 @@ func (a *API) setupRoutes() {
 	a.router.HandleFunc("/api/agent/install-script", a.handleAgentInstallScript).Methods("POST")
 	a.router.HandleFunc("/api/agent/services", a.handleAgentServices).Methods("GET")
 
+	// SSE endpoints (protected with auth)
+	a.router.Handle("/api/sse/dashboard", a.authMiddleware.RequireAuth(http.HandlerFunc(a.handleSSEDashboard))).Methods("GET")
+	a.router.Handle("/api/sse/servers", a.authMiddleware.RequireAuth(http.HandlerFunc(a.handleSSEServers))).Methods("GET")
+	a.router.Handle("/api/sse/server/{id}", a.authMiddleware.RequireAuth(http.HandlerFunc(a.handleSSEServerDetail))).Methods("GET")
+	a.router.Handle("/api/sse/service/{id}/history", a.authMiddleware.RequireAuth(http.HandlerFunc(a.handleSSEServiceHistory))).Methods("GET")
+
 	// Protected Web UI routes
 	a.router.Handle("/", a.authMiddleware.RequireAuth(http.HandlerFunc(a.handleIndex))).Methods("GET")
-	a.router.Handle("/servers", a.authMiddleware.RequireAuth(http.HandlerFunc(a.handleServersPage))).Methods("GET")
-	a.router.Handle("/server/{id}", a.authMiddleware.RequireAuth(http.HandlerFunc(a.handleServerDetailPage))).Methods("GET")
-	a.router.Handle("/alerts", a.authMiddleware.RequireAuth(http.HandlerFunc(a.handleAlertsPage))).Methods("GET")
-	a.router.Handle("/alerts/archived", a.authMiddleware.RequireAuth(http.HandlerFunc(a.handleArchivedAlertsPage))).Methods("GET")
-	a.router.Handle("/users", a.authMiddleware.RequireAuth(http.HandlerFunc(a.handleUsersPage))).Methods("GET")
+	a.router.Handle("/servers", a.authMiddleware.RequireAuth(
+		a.authMiddleware.RequirePermission("servers.view")(http.HandlerFunc(a.handleServersPage)))).Methods("GET")
+	a.router.Handle("/server/{id}", a.authMiddleware.RequireAuth(
+		a.authMiddleware.RequirePermission("servers.view")(http.HandlerFunc(a.handleServerDetailPage)))).Methods("GET")
+	a.router.Handle("/alerts", a.authMiddleware.RequireAuth(
+		a.authMiddleware.RequirePermission("alerts.view")(http.HandlerFunc(a.handleAlertsPage)))).Methods("GET")
+	a.router.Handle("/alerts/archived", a.authMiddleware.RequireAuth(
+		a.authMiddleware.RequirePermission("alerts.view")(http.HandlerFunc(a.handleArchivedAlertsPage)))).Methods("GET")
+	a.router.Handle("/users", a.authMiddleware.RequireAuth(
+		a.authMiddleware.RequirePermission("users.view")(http.HandlerFunc(a.handleUsersPage)))).Methods("GET")
 
 	// Protected API routes - Servers
 	a.router.Handle("/api/servers", a.authMiddleware.RequireAuthAPI(
@@ -124,13 +145,15 @@ func (a *API) setupRoutes() {
 		a.authMiddleware.RequirePermissionAPI("users.view")(http.HandlerFunc(a.handleGetUsers)))).Methods("GET")
 	a.router.Handle("/api/users", a.authMiddleware.RequireAuthAPI(
 		a.authMiddleware.RequirePermissionAPI("users.create")(http.HandlerFunc(a.handleCreateUser)))).Methods("POST")
+	// /api/users/me must come BEFORE /api/users/{id} to avoid route collision
+	a.router.Handle("/api/users/me", a.authMiddleware.RequireAuthAPI(http.HandlerFunc(a.handleGetCurrentUser))).Methods("GET")
 	a.router.Handle("/api/users/{id}", a.authMiddleware.RequireAuthAPI(
 		a.authMiddleware.RequirePermissionAPI("users.view")(http.HandlerFunc(a.handleGetUser)))).Methods("GET")
 	a.router.Handle("/api/users/{id}", a.authMiddleware.RequireAuthAPI(
 		a.authMiddleware.RequirePermissionAPI("users.edit")(http.HandlerFunc(a.handleUpdateUser)))).Methods("PUT")
 	a.router.Handle("/api/users/{id}", a.authMiddleware.RequireAuthAPI(
 		a.authMiddleware.RequirePermissionAPI("users.delete")(http.HandlerFunc(a.handleDeleteUser)))).Methods("DELETE")
-	a.router.Handle("/api/users/{id}/password", a.authMiddleware.RequireAuthAPI(http.HandlerFunc(a.handleChangePassword))).Methods("PUT")
+	a.router.Handle("/api/users/{id}/password", a.authMiddleware.RequireAuthAPI(http.HandlerFunc(a.handleChangePassword))).Methods("PUT", "POST")
 
 	// Protected API routes - Roles
 	a.router.Handle("/api/roles", a.authMiddleware.RequireAuthAPI(
@@ -160,6 +183,9 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // Web UI Handlers
 
 func (a *API) handleIndex(w http.ResponseWriter, r *http.Request) {
+	// Get user from context
+	user := auth.GetUserFromContext(r.Context())
+	
 	servers, err := a.db.GetAllServers()
 	if err != nil {
 		http.Error(w, "Failed to get servers", http.StatusInternalServerError)
@@ -191,9 +217,17 @@ func (a *API) handleIndex(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Check for error message
+	errorMsg := ""
+	if r.URL.Query().Get("error") == "forbidden" {
+		errorMsg = "You don't have permission to access that page."
+	}
+
 	data := map[string]interface{}{
 		"Title":   "Vigilon - Service Monitor",
 		"Servers": serverData,
+		"Error":   errorMsg,
+		"User":    user,
 	}
 
 	if err := a.templates.ExecuteTemplate(w, "index.html", data); err != nil {
@@ -202,6 +236,8 @@ func (a *API) handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleServersPage(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUserFromContext(r.Context())
+	
 	servers, err := a.db.GetAllServers()
 	if err != nil {
 		http.Error(w, "Failed to get servers", http.StatusInternalServerError)
@@ -211,6 +247,7 @@ func (a *API) handleServersPage(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Title":   "Servers - Vigilon",
 		"Servers": servers,
+		"User":    user,
 	}
 
 	if err := a.templates.ExecuteTemplate(w, "servers.html", data); err != nil {
@@ -219,6 +256,7 @@ func (a *API) handleServersPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleServerDetailPage(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUserFromContext(r.Context())
 	vars := mux.Vars(r)
 	id, _ := strconv.Atoi(vars["id"])
 
@@ -234,6 +272,7 @@ func (a *API) handleServerDetailPage(w http.ResponseWriter, r *http.Request) {
 		"Title":    server.Name + " - Vigilon",
 		"Server":   server,
 		"Services": services,
+		"User":     user,
 	}
 
 	if err := a.templates.ExecuteTemplate(w, "server_detail.html", data); err != nil {
@@ -242,6 +281,7 @@ func (a *API) handleServerDetailPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleAlertsPage(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUserFromContext(r.Context())
 	alerts, err := a.db.GetRecentAlerts(50)
 	if err != nil {
 		http.Error(w, "Failed to get alerts", http.StatusInternalServerError)
@@ -251,6 +291,7 @@ func (a *API) handleAlertsPage(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Title":  "Alerts - Vigilon",
 		"Alerts": alerts,
+		"User":   user,
 	}
 
 	if err := a.templates.ExecuteTemplate(w, "alerts.html", data); err != nil {
@@ -259,6 +300,7 @@ func (a *API) handleAlertsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) handleArchivedAlertsPage(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUserFromContext(r.Context())
 	alerts, err := a.db.GetArchivedAlerts(100, 0)
 	if err != nil {
 		http.Error(w, "Failed to get archived alerts", http.StatusInternalServerError)
@@ -268,6 +310,7 @@ func (a *API) handleArchivedAlertsPage(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Title":  "Archived Alerts - Vigilon",
 		"Alerts": alerts,
+		"User":   user,
 	}
 
 	if err := a.templates.ExecuteTemplate(w, "archived_alerts.html", data); err != nil {
@@ -1109,8 +1152,10 @@ func (a *API) handleLogout(w http.ResponseWriter, r *http.Request) {
 // User Management Handlers
 
 func (a *API) handleUsersPage(w http.ResponseWriter, r *http.Request) {
+	user := auth.GetUserFromContext(r.Context())
 	data := map[string]interface{}{
 		"Title": "Users - Vigilon",
+		"User":  user,
 	}
 
 	if err := a.templates.ExecuteTemplate(w, "users.html", data); err != nil {
@@ -1254,6 +1299,23 @@ func (a *API) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, map[string]string{"message": "User deleted successfully"})
 }
 
+func (a *API) handleGetCurrentUser(w http.ResponseWriter, r *http.Request) {
+	currentUser := auth.GetUserFromContext(r.Context())
+	if currentUser == nil {
+		respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Not authenticated"})
+		return
+	}
+
+	user, err := a.db.GetUser(currentUser.ID)
+	if err != nil {
+		respondJSON(w, http.StatusNotFound, map[string]string{"error": "User not found"})
+		return
+	}
+
+	user.PasswordHash = ""
+	respondJSON(w, http.StatusOK, user)
+}
+
 func (a *API) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, _ := strconv.Atoi(vars["id"])
@@ -1284,6 +1346,10 @@ func (a *API) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	// Verify current password if changing own password
 	if currentUser.ID == id {
+		if req.CurrentPassword == "" {
+			respondJSON(w, http.StatusBadRequest, map[string]string{"error": "Current password is required"})
+			return
+		}
 		if !auth.CheckPassword(req.CurrentPassword, user.PasswordHash) {
 			respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Current password is incorrect"})
 			return
@@ -1489,4 +1555,176 @@ func (a *API) handleDeleteRole(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{"message": "Role deleted successfully"})
+}
+
+// SSE Handlers
+
+func (a *API) handleSSEDashboard(w http.ResponseWriter, r *http.Request) {
+	a.sseManager.ServeHTTP(w, r)
+}
+
+func (a *API) handleSSEServers(w http.ResponseWriter, r *http.Request) {
+	a.sseManager.ServeHTTP(w, r)
+}
+
+func (a *API) handleSSEServerDetail(w http.ResponseWriter, r *http.Request) {
+	a.sseManager.ServeHTTP(w, r)
+}
+
+func (a *API) handleSSEServiceHistory(w http.ResponseWriter, r *http.Request) {
+	a.sseManager.ServeHTTP(w, r)
+}
+
+// sseBroadcaster periodically broadcasts dashboard data
+func (a *API) sseBroadcaster(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// Only broadcast if there are connected clients
+			if a.sseManager.ClientCount() == 0 {
+				continue
+			}
+
+			// Fetch latest dashboard data
+			servers, err := a.db.GetAllServers()
+			if err != nil {
+				continue
+			}
+
+			// Build dashboard data
+			type ServerStatus struct {
+				ServerID      int    `json:"server_id"`
+				ServerName    string `json:"server_name"`
+				Enabled       bool   `json:"enabled"`
+				Status        string `json:"status"`
+				LastSeen      *time.Time `json:"last_seen"`
+				ServiceCount  int    `json:"service_count"`
+				RunningCount  int    `json:"running_count"`
+				StoppedCount  int    `json:"stopped_count"`
+				FailedCount   int    `json:"failed_count"`
+			}
+
+			var dashboardData []ServerStatus
+
+			for _, server := range servers {
+				services, _ := a.db.GetServicesByServer(server.ID)
+				
+				running, stopped, failed := 0, 0, 0
+				for _, service := range services {
+					if check, err := a.db.GetLatestServiceCheck(service.ID); err == nil {
+						switch check.Status {
+						case models.StatusRunning:
+							running++
+						case models.StatusStopped:
+							stopped++
+						case models.StatusFailed:
+							failed++
+						}
+					}
+				}
+
+				status := "active"
+				if !server.Enabled {
+					status = "disabled"
+				} else if server.LastSeen == nil {
+					status = "never_connected"
+				} else if time.Since(*server.LastSeen) > 2*time.Minute {
+					status = "offline"
+				}
+
+				dashboardData = append(dashboardData, ServerStatus{
+					ServerID:     server.ID,
+					ServerName:   server.Name,
+					Enabled:      server.Enabled,
+					Status:       status,
+					LastSeen:     server.LastSeen,
+					ServiceCount: len(services),
+					RunningCount: running,
+					StoppedCount: stopped,
+					FailedCount:  failed,
+				})
+			}
+
+			// Broadcast to all clients
+			a.sseManager.Broadcast("dashboard_update", dashboardData)
+
+			// Also broadcast servers list update with connection status
+			type ServerListItem struct {
+				ServerID         int        `json:"server_id"`
+				ServerName       string     `json:"server_name"`
+				Enabled          bool       `json:"enabled"`
+				ConnectionStatus string     `json:"connection_status"`
+				LastSeen         *time.Time `json:"last_seen"`
+			}
+
+			var serversListData []ServerListItem
+			for _, server := range servers {
+				connStatus := "not_connected"
+				if server.LastSeen != nil {
+					if time.Since(*server.LastSeen) < 2*time.Minute {
+						connStatus = "connected"
+					} else if time.Since(*server.LastSeen) < 10*time.Minute {
+						connStatus = "idle"
+					} else {
+						connStatus = "disconnected"
+					}
+				}
+
+				serversListData = append(serversListData, ServerListItem{
+					ServerID:         server.ID,
+					ServerName:       server.Name,
+					Enabled:          server.Enabled,
+					ConnectionStatus: connStatus,
+					LastSeen:         server.LastSeen,
+				})
+			}
+
+			a.sseManager.Broadcast("servers_update", serversListData)
+
+			// Broadcast per-server detail updates
+			for _, server := range servers {
+				type ServerDetailUpdate struct {
+					ServerID int        `json:"server_id"`
+					Enabled  bool       `json:"enabled"`
+					LastSeen *time.Time `json:"last_seen"`
+				}
+
+				a.sseManager.Broadcast("server_detail_update", ServerDetailUpdate{
+					ServerID: server.ID,
+					Enabled:  server.Enabled,
+					LastSeen: server.LastSeen,
+				})
+
+				// Get services for this server
+				services, _ := a.db.GetServicesByServer(server.ID)
+				type ServiceUpdate struct {
+					ServiceID int  `json:"service_id"`
+					Enabled   bool `json:"enabled"`
+				}
+
+				var serviceUpdates []ServiceUpdate
+				for _, svc := range services {
+					serviceUpdates = append(serviceUpdates, ServiceUpdate{
+						ServiceID: svc.ID,
+						Enabled:   svc.Enabled,
+					})
+				}
+
+				a.sseManager.Broadcast("service_update", serviceUpdates)
+
+				// Broadcast service history for each service
+				for _, svc := range services {
+					checks, err := a.db.GetServiceCheckHistory(svc.ID, 20)
+					if err == nil && len(checks) > 0 {
+						a.sseManager.Broadcast("history_update", checks)
+					}
+				}
+			}
+		}
+	}
 }

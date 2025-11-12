@@ -284,41 +284,41 @@ async function logout() {
     }
 }
 
+let currentServiceId = null;
+let serviceHistorySSE = null;
+
 async function viewServiceHistory(id) {
+    currentServiceId = id;
+    
     // Show modal
     const modal = document.getElementById('serviceHistoryModal');
     const content = document.getElementById('serviceHistoryContent');
     modal.style.display = 'block';
     content.innerHTML = '<div class="loading">Loading history...</div>';
     
+    // Load initial data
+    await loadServiceHistory(id);
+    
+    // Setup SSE for real-time updates
+    if (serviceHistorySSE) {
+        serviceHistorySSE.disconnect();
+    }
+    
+    serviceHistorySSE = new SSEClient(`/api/sse/service/${id}/history`);
+    serviceHistorySSE.on('history_update', (checks) => {
+        renderServiceHistory(checks);
+    });
+    serviceHistorySSE.connect();
+}
+
+async function loadServiceHistory(id) {
+    const content = document.getElementById('serviceHistoryContent');
+    
     try {
         const response = await fetch(`/api/services/${id}/checks?limit=20`);
         if (response.ok) {
             const checks = await response.json();
-            
-            if (checks.length === 0) {
-                content.innerHTML = '<p>No check history available yet.</p>';
-                return;
-            }
-            
-            let html = '<table class="table"><thead><tr><th>Date & Time</th><th>Status</th><th>PID</th><th>CPU</th><th>Memory</th><th>Error</th></tr></thead><tbody>';
-            
-            checks.forEach(check => {
-                const date = new Date(check.checked_at).toLocaleString();
-                const statusClass = check.status === 'running' ? 'badge-success' : 
-                                  check.status === 'stopped' ? 'badge-danger' : 'badge-warning';
-                html += `<tr>
-                    <td>${date}</td>
-                    <td><span class="badge ${statusClass}">${check.status}</span></td>
-                    <td>${check.pid || '-'}</td>
-                    <td>${check.cpu ? check.cpu.toFixed(1) + '%' : '-'}</td>
-                    <td>${check.memory ? check.memory.toFixed(1) + ' MB' : '-'}</td>
-                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;" title="${check.error_message || ''}">${check.error_message || '-'}</td>
-                </tr>`;
-            });
-            
-            html += '</tbody></table>';
-            content.innerHTML = html;
+            renderServiceHistory(checks);
         } else {
             content.innerHTML = '<p class="error">Failed to load service history</p>';
         }
@@ -327,7 +327,49 @@ async function viewServiceHistory(id) {
     }
 }
 
-// Initialize page state on load
+function renderServiceHistory(checks) {
+    const content = document.getElementById('serviceHistoryContent');
+    
+    if (checks.length === 0) {
+        content.innerHTML = '<p>No check history available yet.</p>';
+        return;
+    }
+    
+    let html = '<table class="table"><thead><tr><th>Date & Time</th><th>Status</th><th>PID</th><th>CPU</th><th>Memory</th><th>Error</th></tr></thead><tbody>';
+    
+    checks.forEach(check => {
+        const date = new Date(check.checked_at).toLocaleString();
+        const statusClass = check.status === 'running' ? 'badge-success' : 
+                          check.status === 'stopped' ? 'badge-danger' : 'badge-warning';
+        html += `<tr>
+            <td>${date}</td>
+            <td><span class="badge ${statusClass}">${check.status}</span></td>
+            <td>${check.pid || '-'}</td>
+            <td>${check.cpu ? check.cpu.toFixed(1) + '%' : '-'}</td>
+            <td>${check.memory ? check.memory.toFixed(1) + ' MB' : '-'}</td>
+            <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;" title="${check.error_message || ''}">${check.error_message || '-'}</td>
+        </tr>`;
+    });
+    
+    html += '</tbody></table>';
+    content.innerHTML = html;
+}
+
+// Close modal handler override
+const originalCloseModal = window.closeModal;
+window.closeModal = function() {
+    if (serviceHistorySSE) {
+        serviceHistorySSE.disconnect();
+        serviceHistorySSE = null;
+    }
+    currentServiceId = null;
+    if (originalCloseModal) originalCloseModal();
+    
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        modal.style.display = 'none';
+    });
+}// Initialize page state on load
 document.addEventListener('DOMContentLoaded', function() {
     // Restore agent script visibility state
     const agentScriptSection = document.getElementById('agentScriptSection');

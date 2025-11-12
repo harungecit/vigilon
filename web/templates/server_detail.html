@@ -9,13 +9,35 @@
 <body>
     <nav class="navbar">
         <div class="container">
-            <h1>Vigilon</h1>
+            <h1><a href="/" style="color: white; text-decoration: none;">Vigilon</a></h1>
             <ul>
                 <li><a href="/">Dashboard</a></li>
+                {{if or (eq .User.Role.Name "Super Admin") (.User.Role.IsSuperAdmin)}}
                 <li><a href="/servers">Servers</a></li>
                 <li><a href="/alerts">Alerts</a></li>
                 <li><a href="/users">Users</a></li>
-                <li><a href="#" onclick="logout()">Logout</a></li>
+                {{else}}
+                    {{range .User.Role.Permissions}}
+                        {{if eq .Name "servers.view"}}
+                <li><a href="/servers">Servers</a></li>
+                        {{end}}
+                        {{if eq .Name "alerts.view"}}
+                <li><a href="/alerts">Alerts</a></li>
+                        {{end}}
+                        {{if eq .Name "users.view"}}
+                <li><a href="/users">Users</a></li>
+                        {{end}}
+                    {{end}}
+                {{end}}
+                <li class="user-dropdown">
+                    <a href="#" onclick="toggleUserMenu(event)" class="user-menu-trigger">
+                        {{.User.Username}} ▾
+                    </a>
+                    <div id="userDropdown" class="dropdown-content">
+                        <a href="#" onclick="showChangePasswordModal()">Change Password</a>
+                        <a href="#" onclick="logout()">Logout</a>
+                    </div>
+                </li>
             </ul>
         </div>
     </nav>
@@ -29,7 +51,7 @@
             </div>
         </div>
 
-        <div class="server-detail">
+    <div class="server-detail" data-server-id="{{.Server.ID}}">
             <!-- Server Information -->
             <div class="detail-section">
                 <h3>Server Information</h3>
@@ -211,7 +233,7 @@
                     </thead>
                     <tbody>
                         {{range .Services}}
-                        <tr>
+                        <tr data-service-id="{{.ID}}">
                             <td><code>{{.Name}}</code></td>
                             <td>{{.DisplayName}}</td>
                             <td>
@@ -276,6 +298,7 @@
         </div>
     </div>
 
+    <script src="/static/js/sse.js"></script>
     <script src="/static/js/main.js"></script>
     <script src="/static/js/server_detail.js"></script>
     <script>
@@ -286,6 +309,55 @@
             mode: '{{.Server.MonitoringMode}}',
             token: '{{.Server.AgentToken}}'
         };
+
+        // SSE for server detail
+        autoRefresh = false;
+        const sseClient = new SSEClient('/api/sse/server/' + serverData.id);
+        
+        sseClient.on('server_detail_update', (data) => {
+            updateServerDetail(data);
+        });
+
+        sseClient.on('service_update', (data) => {
+            updateServiceStatus(data);
+        });
+
+        sseClient.connect();
+
+        function updateServerDetail(serverUpdate) {
+            // Update last seen
+            const lastSeenRow = document.querySelector('.detail-table tr:has(td:contains("Last Seen")) td:last-child');
+            if (lastSeenRow && serverUpdate.last_seen) {
+                const d = new Date(serverUpdate.last_seen);
+                lastSeenRow.textContent = d.toLocaleString();
+            }
+
+            // Update enabled status badge
+            const statusRow = document.querySelector('.detail-table tr:has(td:contains("Status")) td:last-child .badge');
+            if (statusRow && serverUpdate.enabled !== undefined) {
+                statusRow.textContent = serverUpdate.enabled ? 'Enabled' : 'Disabled';
+                statusRow.className = serverUpdate.enabled ? 'badge badge-success' : 'badge badge-secondary';
+            }
+        }
+
+        function updateServiceStatus(serviceData) {
+            serviceData.forEach(svc => {
+                const row = document.querySelector(`tr[data-service-id="${svc.service_id}"]`);
+                if (!row) return;
+
+                // Update status badge
+                const statusCell = row.querySelector('td:nth-child(3)');
+                if (statusCell) {
+                    const badgeClass = svc.enabled ? 'badge-success' : 'badge-secondary';
+                    const badgeText = svc.enabled ? 'Enabled' : 'Disabled';
+                    statusCell.innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span>`;
+                }
+            });
+        }
+
+        window.addEventListener('beforeunload', () => {
+            sseClient.disconnect();
+        });
     </script>
 </body>
 </html>

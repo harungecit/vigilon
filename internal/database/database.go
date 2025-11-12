@@ -773,6 +773,32 @@ func (db *DB) GetUser(id int) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Load role permissions
+	if user.Role != nil && user.Role.ID > 0 {
+		permQuery := `
+			SELECT p.id, p.name, p.display_name, p.description, p.category
+			FROM permissions p
+			JOIN role_permissions rp ON p.id = rp.permission_id
+			WHERE rp.role_id = ?
+			ORDER BY p.category, p.name
+		`
+		rows, err := db.conn.Query(permQuery, user.Role.ID)
+		if err != nil {
+			return user, nil // Return user even if permissions fail
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			perm := models.Permission{}
+			err := rows.Scan(&perm.ID, &perm.Name, &perm.DisplayName, &perm.Description, &perm.Category)
+			if err != nil {
+				continue
+			}
+			user.Role.Permissions = append(user.Role.Permissions, perm)
+		}
+	}
+
 	return user, nil
 }
 
@@ -795,6 +821,32 @@ func (db *DB) GetUserByUsername(username string) (*models.User, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Load role permissions
+	if user.Role != nil && user.Role.ID > 0 {
+		permQuery := `
+			SELECT p.id, p.name, p.display_name, p.description, p.category
+			FROM permissions p
+			JOIN role_permissions rp ON p.id = rp.permission_id
+			WHERE rp.role_id = ?
+			ORDER BY p.category, p.name
+		`
+		rows, err := db.conn.Query(permQuery, user.Role.ID)
+		if err != nil {
+			return user, nil
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			perm := models.Permission{}
+			err := rows.Scan(&perm.ID, &perm.Name, &perm.DisplayName, &perm.Description, &perm.Category)
+			if err != nil {
+				continue
+			}
+			user.Role.Permissions = append(user.Role.Permissions, perm)
+		}
+	}
+
 	return user, nil
 }
 

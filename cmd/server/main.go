@@ -78,8 +78,8 @@ func main() {
 		Addr:         addr,
 		Handler:      apiHandler,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		WriteTimeout: 0, // Disable write timeout for SSE
+		IdleTimeout:  120 * time.Second,
 	}
 
 	// Start server in a goroutine

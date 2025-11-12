@@ -9,19 +9,47 @@
 <body>
     <nav class="navbar">
         <div class="container">
-            <h1>Vigilon</h1>
+            <h1><a href="/" style="color: white; text-decoration: none;">Vigilon</a></h1>
             <ul>
                 <li><a href="/" class="active">Dashboard</a></li>
+                {{if or (eq .User.Role.Name "Super Admin") (.User.Role.IsSuperAdmin)}}
                 <li><a href="/servers">Servers</a></li>
                 <li><a href="/alerts">Alerts</a></li>
                 <li><a href="/users">Users</a></li>
-                <li><a href="#" onclick="logout()">Logout</a></li>
+                {{else}}
+                    {{range .User.Role.Permissions}}
+                        {{if eq .Name "servers.view"}}
+                <li><a href="/servers">Servers</a></li>
+                        {{end}}
+                        {{if eq .Name "alerts.view"}}
+                <li><a href="/alerts">Alerts</a></li>
+                        {{end}}
+                        {{if eq .Name "users.view"}}
+                <li><a href="/users">Users</a></li>
+                        {{end}}
+                    {{end}}
+                {{end}}
+                <li class="user-dropdown">
+                    <a href="#" onclick="toggleUserMenu(event)" class="user-menu-trigger">
+                        {{.User.Username}} ▾
+                    </a>
+                    <div id="userDropdown" class="dropdown-content">
+                        <a href="#" onclick="showChangePasswordModal()">Change Password</a>
+                        <a href="#" onclick="logout()">Logout</a>
+                    </div>
+                </li>
             </ul>
         </div>
     </nav>
 
     <div class="container">
         <h2>Service Status Dashboard</h2>
+        
+        {{if .Error}}
+        <div class="alert alert-error" style="margin-bottom: 2rem;">
+            <strong>⚠️ Access Denied:</strong> {{.Error}}
+        </div>
+        {{end}}
         
         <div class="info-box" style="margin-bottom: 2rem;">
             <p><strong>ℹ️ About Dashboard:</strong> This page shows real-time status of all monitored services across your servers. Each card displays a server with its configured services and their current status (running ✅, stopped 🔴, failed ❌, degraded ⚠️).</p>
@@ -35,21 +63,24 @@
         {{else}}
                 <div class="server-grid">
             {{range $serverData := .Servers}}
-            <div class="server-card">
+            <div class="server-card" data-server-id="{{$serverData.Server.ID}}">
                 <div class="server-header">
                     <h3>{{$serverData.Server.Name}}</h3>
-                    <span class="badge {{if $serverData.Server.Enabled}}badge-success{{else}}badge-secondary{{end}}">
+                    <span class="badge {{if $serverData.Server.Enabled}}badge-success{{else}}badge-secondary{{end}} badge-server-enabled">
                         {{if $serverData.Server.Enabled}}Enabled{{else}}Disabled{{end}}
                     </span>
+                    <div class="server-summary" style="font-size:0.85rem; margin-left:1rem;">
+                        <span class="running-count">0</span>/<span class="service-count">0</span> running
+                    </div>
                 </div>
                 <div class="server-info">
                     <p><strong>IP:</strong> {{$serverData.Server.IPAddress}}</p>
                     <p><strong>OS:</strong> {{$serverData.Server.OS}}</p>
                     <p><strong>Mode:</strong> {{$serverData.Server.MonitoringMode}}</p>
                     {{if $serverData.Server.LastSeen}}
-                    <p><strong>Last Seen:</strong> {{$serverData.Server.LastSeen.Format "15:04:05"}}</p>
+                    <p><strong>Last Seen:</strong> <span class="last-seen">{{$serverData.Server.LastSeen.Format "15:04:05"}}</span></p>
                     {{else}}
-                    <p><strong>Last Seen:</strong> <span style="color: #e74c3c;">Never</span></p>
+                    <p><strong>Last Seen:</strong> <span class="last-seen" style="color: #e74c3c;">Never</span></p>
                     {{end}}
                 </div>
 
@@ -60,7 +91,7 @@
                         {{range $service := $serverData.Services}}
                         {{if $service.Enabled}}
                         {{$status := index $serverData.Statuses $service.ID}}
-                        <div class="service-status-card {{if $status}}{{$status.Status}}{{else}}unknown{{end}}">
+                        <div class="service-status-card {{if $status}}{{$status.Status}}{{else}}unknown{{end}}" data-service-id="{{$service.ID}}">
                             <div class="service-status-icon">
                                 {{if $status}}
                                     {{if eq $status.Status "running"}}✅{{end}}
@@ -72,20 +103,22 @@
                             </div>
                             <div class="service-status-details">
                                 <div class="service-status-name">{{$service.DisplayName}}</div>
+                                <div class="service-status-meta">
                                 {{if $status}}
                                     {{if ne $status.Status "running"}}
-                                    {{if $status.ErrorMessage}}
-                                    <div class="service-status-error" title="{{$status.ErrorMessage}}">
-                                        {{$status.ErrorMessage}}
-                                    </div>
-                                    {{end}}
+                                        {{if $status.ErrorMessage}}
+                                        <div class="service-status-error" title="{{$status.ErrorMessage}}">
+                                            {{$status.ErrorMessage}}
+                                        </div>
+                                        {{end}}
                                     {{else}}
-                                    <div style="font-size: 0.75rem; color: #27ae60;">
-                                        {{if $status.PID}}PID: {{$status.PID}}{{end}}
-                                        {{if $status.CPU}} • CPU: {{printf "%.1f" $status.CPU}}%{{end}}
-                                    </div>
+                                        <div class="service-status-stats" style="font-size: 0.75rem; color: #27ae60;">
+                                            {{if $status.PID}}PID: {{$status.PID}}{{end}}
+                                            {{if $status.CPU}} • CPU: {{printf "%.1f" $status.CPU}}%{{end}}
+                                        </div>
                                     {{end}}
                                 {{end}}
+                                </div>
                             </div>
                         </div>
                         {{end}}
@@ -105,6 +138,78 @@
         {{end}}
     </div>
 
+    <script src="/static/js/sse.js"></script>
     <script src="/static/js/main.js"></script>
+    <script>
+        // Disable auto-refresh when SSE is enabled
+        autoRefresh = false;
+
+        // Initialize SSE for real-time updates
+        const sseClient = new SSEClient('/api/sse/dashboard');
+        
+        sseClient.on('connected', () => {
+            // Connected
+        });
+
+        sseClient.on('dashboard_update', (data) => {
+            updateDashboard(data);
+        });
+
+        sseClient.on('disconnected', () => {
+            // Will reconnect automatically
+        });
+
+        sseClient.connect();
+
+        // Update dashboard without full page reload
+        function updateDashboard(serversData) {
+            // Incremental DOM updates for dashboard cards
+            try {
+                serversData.forEach(server => {
+                    const serverCard = document.querySelector(`[data-server-id="${server.server_id}"]`);
+                    if (!serverCard) return;
+
+                    // Enabled badge
+                    const badge = serverCard.querySelector('.badge-server-enabled');
+                    if (badge) {
+                        badge.textContent = server.enabled ? 'Enabled' : 'Disabled';
+                        badge.classList.toggle('badge-success', !!server.enabled);
+                        badge.classList.toggle('badge-secondary', !server.enabled);
+                    }
+
+                    // Counts
+                    const runningEl = serverCard.querySelector('.running-count');
+                    const serviceCountEl = serverCard.querySelector('.service-count');
+                    if (runningEl) runningEl.textContent = server.running_count;
+                    if (serviceCountEl) serviceCountEl.textContent = server.service_count;
+
+                    // Last seen
+                    const lastSeenEl = serverCard.querySelector('.last-seen');
+                    if (lastSeenEl) {
+                        if (server.last_seen) {
+                            // server.last_seen expected as ISO timestamp
+                            const d = new Date(server.last_seen);
+                            lastSeenEl.textContent = d.toLocaleTimeString();
+                            lastSeenEl.style.color = '';
+                        } else {
+                            lastSeenEl.textContent = 'Never';
+                            lastSeenEl.style.color = '#e74c3c';
+                        }
+                    }
+
+                    // Optionally mark server card status class
+                    serverCard.classList.toggle('server-offline', server.status === 'offline');
+                    serverCard.classList.toggle('server-disabled', server.status === 'disabled');
+                });
+            } catch (err) {
+                console.error('Error updating dashboard DOM:', err);
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            sseClient.disconnect();
+        });
+    </script>
 </body>
 </html>

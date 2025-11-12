@@ -85,7 +85,7 @@ document.getElementById('addServerForm').addEventListener('submit', async (e) =>
     };
 
     try {
-        const response = await fetch('/api/servers', {
+        const response = await apiFetch('/api/servers', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -93,25 +93,20 @@ document.getElementById('addServerForm').addEventListener('submit', async (e) =>
             body: JSON.stringify(data),
         });
 
-        if (response.ok) {
-            const server = await response.json();
+        const server = await response.json();
 
-            // Close modal and redirect to server details page
-            closeModal();
+        // Close modal and redirect to server details page
+        closeModal();
 
-            if (mode === 'push') {
-                alert('Server added successfully! Redirecting to server details to get the installation command...');
-                window.location.href = `/server/${server.id}`;
-            } else {
-                alert('Server added successfully!');
-                window.location.reload();
-            }
+        if (mode === 'push') {
+            showToast('Server added successfully! Redirecting...', 'success');
+            setTimeout(() => window.location.href = `/server/${server.id}`, 1000);
         } else {
-            const error = await response.json();
-            alert('Failed to add server: ' + (error.error || 'Unknown error'));
+            showToast('Server added successfully!', 'success');
+            setTimeout(() => window.location.reload(), 1000);
         }
     } catch (error) {
-        alert('Failed to add server: ' + error.message);
+        // Error already handled by apiFetch
     }
 });
 
@@ -121,41 +116,32 @@ async function disconnectServer(id) {
     }
 
     try {
-        const response = await fetch(`/api/servers/${id}/disconnect`, {
+        await apiFetch(`/api/servers/${id}/disconnect`, {
             method: 'POST',
         });
 
-        if (response.ok) {
-            alert('Server disconnected successfully!');
-            window.location.reload();
-        } else {
-            const error = await response.json();
-            alert('Failed to disconnect server: ' + (error.error || 'Unknown error'));
-        }
+        showToast('Server disconnected successfully!', 'success');
+        setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
-        alert('Failed to disconnect server: ' + error.message);
+        // Error already handled by apiFetch
     }
 }
 
-function deleteServer(serverId) {
+async function deleteServer(serverId) {
     if (!confirm('Are you sure you want to delete this server?')) {
         return;
     }
 
-    fetch(`/api/servers/${serverId}`, {
-        method: 'DELETE'
-    })
-    .then(response => {
-        if (response.ok) {
-            location.reload();
-        } else {
-            alert('Failed to delete server');
-        }
-    })
-    .catch(error => {
-        console.error('Error deleting server:', error);
-        alert('Failed to delete server');
-    });
+    try {
+        await apiFetch(`/api/servers/${serverId}`, {
+            method: 'DELETE'
+        });
+        
+        showToast('Server deleted successfully!', 'success');
+        setTimeout(() => location.reload(), 1000);
+    } catch (error) {
+        // Error already handled by apiFetch
+    }
 }
 
 async function logout() {

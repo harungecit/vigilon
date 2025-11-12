@@ -3,6 +3,7 @@ let currentRoleId = null;
 let currentRoleName = null;
 let allPermissions = [];
 let previousModal = null; // Track previous modal for navigation
+let currentUser = null; // Current logged-in user
 
 async function loadRoles() {
     try {
@@ -28,8 +29,85 @@ function updateRoleSelect() {
     });
 }
 
+async function loadCurrentUser() {
+    try {
+        const response = await fetch('/api/users/me');
+        if (response.ok) {
+            currentUser = await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to load current user:', error);
+    }
+}
+
+function hasPermission(permissionName) {
+    if (!currentUser) {
+        console.warn('hasPermission called but currentUser not loaded');
+        return false;
+    }
+    if (currentUser.role && currentUser.role.is_super_admin) return true;
+    return currentUser.role && currentUser.role.permissions && currentUser.role.permissions.some(p => p.name === permissionName);
+}
+
+function canViewRoles() {
+    if (!currentUser || !currentUser.role) return false;
+    // Super Admin can view all roles
+    if (currentUser.role.is_super_admin) return true;
+    // Admin can view roles
+    if (currentUser.role.name === 'Admin') return true;
+    // Others cannot view roles
+    return false;
+}
+
+function canEditRole(role) {
+    if (!currentUser || !currentUser.role) return false;
+    
+    // Super Admin can edit everything EXCEPT Super Admin role itself
+    if (currentUser.role.is_super_admin) {
+        return !role.is_super_admin;
+    }
+    
+    // Admin can edit User and Custom roles only (NOT Super Admin or Admin)
+    if (currentUser.role.name === 'Admin') {
+        if (role.is_super_admin) return false; // Cannot edit Super Admin
+        if (role.name === 'Admin') return false; // Cannot edit Admin role
+        return true; // Can edit User and Custom roles
+    }
+    
+    // User and Custom roles cannot edit any roles
+    return false;
+}
+
+function canDeleteRole(role) {
+    if (!currentUser || !currentUser.role) return false;
+    
+    // Cannot delete system roles (Super Admin, Admin, User)
+    if (role.is_system || role.is_super_admin) return false;
+    if (role.name === 'Admin' || role.name === 'User') return false;
+    
+    // Super Admin can delete custom roles
+    if (currentUser.role.is_super_admin) return true;
+    
+    // Admin can delete custom roles
+    if (currentUser.role.name === 'Admin') return true;
+    
+    // Others cannot delete roles
+    return false;
+}
+
+function canCreateRole() {
+    if (!currentUser || !currentUser.role) return false;
+    // Only Super Admin and Admin can create new roles
+    return currentUser.role.is_super_admin || currentUser.role.name === 'Admin';
+}
+
 async function loadUsers() {
     const container = document.getElementById('users-container');
+    
+    // Load current user first if not loaded
+    if (!currentUser) {
+        await loadCurrentUser();
+    }
     
     try {
         const response = await fetch('/api/users');
@@ -50,6 +128,15 @@ async function loadUsers() {
             const lastLogin = user.last_login_at ? new Date(user.last_login_at).toLocaleString() : 'Never';
             const roleClass = user.role.is_super_admin ? 'badge-danger' : (user.role.name === 'admin' ? 'badge-warning' : 'badge-info');
             
+            // Check permissions for actions
+            const canEdit = hasPermission('users.edit');
+            const canDelete = hasPermission('users.delete');
+            
+            // Don't allow non-super-admins to edit super-admins
+            const isSuperAdmin = currentUser && currentUser.role && currentUser.role.is_super_admin;
+            const canEditThisUser = canEdit && (!user.role.is_super_admin || isSuperAdmin);
+            const canDeleteThisUser = canDelete && !user.role.is_super_admin;
+            
             html += `
                 <tr>
                     <td><strong>${user.username}</strong></td>
@@ -62,9 +149,9 @@ async function loadUsers() {
                     <td><span class="badge ${user.enabled ? 'badge-success' : 'badge-secondary'}">${user.enabled ? 'Enabled' : 'Disabled'}</span></td>
                     <td>${lastLogin}</td>
                     <td>
-                        <button class="btn btn-sm" onclick="editUser(${user.id})">Edit</button>
-                        <button class="btn btn-sm" onclick="changePassword(${user.id})">Password</button>
-                        ${!user.role.is_super_admin ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id}, '${escapeHtml(user.username)}')">Delete</button>` : ''}
+                        ${canEditThisUser ? `<button class="btn btn-sm" onclick="editUser(${user.id})">Edit</button>` : ''}
+                        ${canEditThisUser ? `<button class="btn btn-sm" onclick="changePassword(${user.id})">Password</button>` : ''}
+                        ${canDeleteThisUser ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id}, '${escapeHtml(user.username)}')">Delete</button>` : ''}
                     </td>
                 </tr>
             `;
@@ -134,10 +221,96 @@ async function deleteUser(id, username) {
     }
 }
 
-function changePassword(id) {
-    document.getElementById('passwordUserId').value = id;
-    document.getElementById('passwordForm').reset();
-    document.getElementById('passwordModal').style.display = 'block';
+async function changePassword(id) {
+    // Get current user to check if admin
+    const currentUserResponse = await fetch('/api/users/me');
+    const currentUser = await currentUserResponse.json();
+    
+    // Create modal dynamically
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'block';
+    modal.id = 'changePasswordModal';
+    
+    const isOwnPassword = currentUser.id === id;
+    
+    modal.innerHTML = `
+        <div class="modal-content">
+            <span class="close" onclick="this.closest('.modal').remove()">&times;</span>
+            <h3>${isOwnPassword ? 'Change Your Password' : 'Set New Password for User'}</h3>
+            <form id="changePasswordFormDynamic">
+                <input type="hidden" id="targetUserId" value="${id}">
+                ${isOwnPassword ? `
+                <div class="form-group">
+                    <label for="currentPasswordInput">Current Password: *</label>
+                    <input type="password" id="currentPasswordInput" name="current_password" class="form-input" required minlength="4">
+                </div>
+                ` : ''}
+                <div class="form-group">
+                    <label for="newPasswordInput">New Password: *</label>
+                    <input type="password" id="newPasswordInput" name="new_password" class="form-input" required minlength="4" placeholder="Minimum 4 characters">
+                </div>
+                <div class="form-group">
+                    <label for="confirmPasswordInput">Confirm Password: *</label>
+                    <input type="password" id="confirmPasswordInput" name="confirm_password" class="form-input" required minlength="4" placeholder="Repeat new password">
+                </div>
+                <button type="submit" class="btn">Change Password</button>
+            </form>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    document.getElementById('changePasswordFormDynamic').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const userId = document.getElementById('targetUserId').value;
+        const newPassword = document.getElementById('newPasswordInput').value;
+        const confirmPassword = document.getElementById('confirmPasswordInput').value;
+        const currentPasswordInput = document.getElementById('currentPasswordInput');
+        
+        if (newPassword !== confirmPassword) {
+            showToast('Passwords do not match!', 'error');
+            return;
+        }
+        
+        if (newPassword.length < 4) {
+            showToast('Password must be at least 4 characters long!', 'error');
+            return;
+        }
+        
+        const data = {
+            new_password: newPassword,
+        };
+        
+        // Add current password if changing own password
+        if (currentPasswordInput) {
+            data.current_password = currentPasswordInput.value;
+        }
+        
+        try {
+            const response = await apiFetch(`/api/users/${userId}/password`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            showToast(result.message || 'Password changed successfully!', 'success');
+            modal.remove();
+        } catch (error) {
+            // Error already shown by apiFetch
+        }
+    });
+    
+    // Close on outside click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
 }
 
 document.getElementById('userForm').addEventListener('submit', async (e) => {
@@ -182,48 +355,7 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
     }
 });
 
-document.getElementById('passwordForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const userId = document.getElementById('passwordUserId').value;
-    const newPassword = document.getElementById('newPassword').value;
-    const confirmPassword = document.getElementById('confirmPassword').value;
-    
-    if (newPassword !== confirmPassword) {
-        alert('Passwords do not match!');
-        return;
-    }
-    
-    if (newPassword.length < 6) {
-        alert('Password must be at least 6 characters long!');
-        return;
-    }
-    
-    const data = {
-        new_password: newPassword,
-    };
-    
-    try {
-        const response = await fetch(`/api/users/${userId}/password`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(data),
-        });
-        
-        if (response.ok) {
-            alert('Password changed successfully!');
-            closeModal();
-            document.getElementById('passwordForm').reset();
-        } else {
-            const error = await response.json();
-            alert('Failed to change password: ' + (error.error || 'Unknown error'));
-        }
-    } catch (error) {
-        alert('Failed to change password: ' + error.message);
-    }
-});
+// Old password form handler removed - now using dynamic modal in changePassword() function
 
 async function logout() {
     if (!confirm('Are you sure you want to logout?')) {
@@ -271,8 +403,8 @@ async function showRolePermissions(roleId, roleName, fromModal = null) {
             content.innerHTML = renderPermissionsList(permissions);
         }
         
-        // Show edit button only if user has permission and role is not super admin
-        if (!role.is_super_admin) {
+        // Show edit button only if user can edit this role
+        if (canEditRole(role)) {
             actions.style.display = 'block';
         }
         
@@ -329,6 +461,21 @@ function escapeHtml(text) {
 }
 
 async function editRolePermissions() {
+    // First check if we have permission to edit this role
+    try {
+        const roleResponse = await fetch(`/api/roles/${currentRoleId}`);
+        if (!roleResponse.ok) throw new Error('Failed to load role');
+        const role = await roleResponse.json();
+        
+        if (!canEditRole(role)) {
+            alert('You do not have permission to edit permissions for this role.');
+            return;
+        }
+    } catch (error) {
+        alert('Failed to verify permissions: ' + error.message);
+        return;
+    }
+    
     // Close view modal
     document.getElementById('rolePermissionsModal').style.display = 'none';
     
@@ -490,6 +637,12 @@ document.addEventListener('change', (e) => {
 
 // Role Management Functions
 async function showRolesManagement() {
+    // Check permission first
+    if (!canViewRoles()) {
+        alert('You do not have permission to view roles.');
+        return;
+    }
+    
     const modal = document.getElementById('rolesManagementModal');
     const content = document.getElementById('rolesManagementContent');
     
@@ -509,6 +662,9 @@ async function showRolesManagement() {
                              (role.is_system ? '<span class="badge badge-warning">System</span>' : 
                              '<span class="badge badge-info">Custom</span>');
             
+            const canEdit = canEditRole(role);
+            const canDelete = canDeleteRole(role);
+            
             html += `
                 <tr>
                     <td><strong>${escapeHtml(role.name)}</strong></td>
@@ -517,14 +673,20 @@ async function showRolesManagement() {
                     <td>${typeBadge}</td>
                     <td>
                         <button class="btn btn-sm" onclick="showRolePermissions(${role.id}, '${escapeHtml(role.display_name)}', 'rolesManagement')" title="View Permissions">Permissions</button>
-                        ${!role.is_super_admin ? `<button class="btn btn-sm" onclick="editRole(${role.id})">Edit</button>` : ''}
-                        ${!role.is_system ? `<button class="btn btn-sm btn-danger" onclick="deleteRole(${role.id}, '${escapeHtml(role.name)}')">Delete</button>` : ''}
+                        ${canEdit ? `<button class="btn btn-sm" onclick="editRole(${role.id})">Edit</button>` : ''}
+                        ${canDelete ? `<button class="btn btn-sm btn-danger" onclick="deleteRole(${role.id}, '${escapeHtml(role.name)}')">Delete</button>` : ''}
                     </td>
                 </tr>
             `;
         });
         
         html += '</tbody></table>';
+        
+        // Add "Add New Role" button if user has permission
+        if (canCreateRole()) {
+            html += '<div style="margin-top: 1rem; text-align: right;"><button class="btn" onclick="showAddRoleModal()">Add New Role</button></div>';
+        }
+        
         content.innerHTML = html;
         
     } catch (error) {
@@ -533,6 +695,11 @@ async function showRolesManagement() {
 }
 
 function showAddRoleModal() {
+    if (!canCreateRole()) {
+        alert('You do not have permission to create roles.');
+        return;
+    }
+    
     document.getElementById('roleModalTitle').textContent = 'Add New Role';
     document.getElementById('roleForm').reset();
     document.getElementById('roleFormId').value = '';
@@ -546,6 +713,12 @@ async function editRole(roleId) {
         if (!response.ok) throw new Error('Failed to load role');
         
         const role = await response.json();
+        
+        // Check permission before editing
+        if (!canEditRole(role)) {
+            alert('You do not have permission to edit this role.');
+            return;
+        }
         
         document.getElementById('roleModalTitle').textContent = 'Edit Role';
         document.getElementById('roleFormId').value = role.id;
@@ -562,6 +735,21 @@ async function editRole(roleId) {
 }
 
 async function deleteRole(roleId, roleName) {
+    // First fetch the role to check permissions
+    try {
+        const roleResponse = await fetch(`/api/roles/${roleId}`);
+        if (!roleResponse.ok) throw new Error('Failed to load role');
+        const role = await roleResponse.json();
+        
+        if (!canDeleteRole(role)) {
+            alert('You do not have permission to delete this role.');
+            return;
+        }
+    } catch (error) {
+        alert('Failed to verify permissions: ' + error.message);
+        return;
+    }
+    
     if (!confirm(`Are you sure you want to delete role "${roleName}"?\n\nAll users with this role will need to be reassigned.`)) {
         return;
     }
@@ -620,8 +808,29 @@ document.getElementById('roleForm').addEventListener('submit', async (e) => {
 });
 
 // Initialize
-loadRoles();
-loadUsers();
+async function init() {
+    await loadCurrentUser();
+    await loadRoles();
+    await loadUsers();
+    
+    // Show/hide Manage Roles button based on permissions
+    const manageRolesBtn = document.querySelector('button[onclick="showRolesManagement()"]');
+    if (manageRolesBtn) {
+        if (!canViewRoles()) {
+            manageRolesBtn.style.display = 'none';
+        }
+    }
+    
+    // Show/hide Add User button based on permissions
+    const addUserBtn = document.querySelector('button[onclick="showAddUserModal()"]');
+    if (addUserBtn) {
+        if (!hasPermission('users.create') && !currentUser.role.is_super_admin) {
+            addUserBtn.style.display = 'none';
+        }
+    }
+}
+
+init();
 
 function goBackToRolesManagement() {
     closeModal();

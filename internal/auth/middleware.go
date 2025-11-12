@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 
@@ -84,7 +85,8 @@ func (m *Middleware) RequirePermission(permission string) func(http.Handler) htt
 			// Check permission
 			hasPermission, err := m.db.UserHasPermission(user.ID, permission)
 			if err != nil || !hasPermission {
-				http.Error(w, "Forbidden", http.StatusForbidden)
+				// For web UI, redirect to home with error message
+				http.Redirect(w, r, "/?error=forbidden", http.StatusSeeOther)
 				return
 			}
 
@@ -144,23 +146,36 @@ func (m *Middleware) RequirePermissionAPI(permission string) func(http.Handler) 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user := GetUserFromContext(r.Context())
 			if user == nil {
+				log.Printf("[PERMISSION] User not in context for %s %s", r.Method, r.URL.Path)
 				respondJSON(w, http.StatusUnauthorized, map[string]string{"error": "Unauthorized"})
 				return
 			}
 
+			log.Printf("[PERMISSION] User: %s (ID:%d), Role: %s (SuperAdmin:%v), Required: %s, Path: %s %s",
+				user.Username, user.ID, user.Role.Name, user.Role.IsSuperAdmin, permission, r.Method, r.URL.Path)
+
 			// Super admin has all permissions
 			if user.Role != nil && user.Role.IsSuperAdmin {
+				log.Printf("[PERMISSION] ✓ Super admin access granted")
 				next.ServeHTTP(w, r)
 				return
 			}
 
 			// Check permission
 			hasPermission, err := m.db.UserHasPermission(user.ID, permission)
-			if err != nil || !hasPermission {
+			if err != nil {
+				log.Printf("[PERMISSION] ✗ Error checking permission: %v", err)
+				respondJSON(w, http.StatusForbidden, map[string]string{"error": "Forbidden: insufficient permissions"})
+				return
+			}
+			
+			if !hasPermission {
+				log.Printf("[PERMISSION] ✗ User does not have permission '%s'", permission)
 				respondJSON(w, http.StatusForbidden, map[string]string{"error": "Forbidden: insufficient permissions"})
 				return
 			}
 
+			log.Printf("[PERMISSION] ✓ Permission granted")
 			next.ServeHTTP(w, r)
 		})
 	}
