@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -74,11 +75,14 @@ type ServiceReport struct {
 
 var (
 	configPath = flag.String("config", "/etc/vigilon-agent/config.yaml", "Path to configuration file")
-	version    = "1.0.0"
+	version    = "1.1.2"
 
 	// Cached service list from API
 	cachedServices []string
-	
+
+	// Track previous service states to log only changes
+	previousServiceStates = make(map[string]ServiceStatus)
+
 	// Reusable HTTP client with connection pooling
 	httpClient = &http.Client{
 		Timeout: 30 * time.Second,
@@ -134,9 +138,13 @@ func main() {
 	refreshTicker := time.NewTicker(config.ServiceRefreshInterval)
 	defer refreshTicker.Stop()
 
-	// Manual GC trigger every 10 minutes to prevent memory buildup
-	gcTicker := time.NewTicker(10 * time.Minute)
+	// More aggressive GC to prevent memory buildup
+	// Run GC every 2 minutes instead of 10
+	gcTicker := time.NewTicker(2 * time.Minute)
 	defer gcTicker.Stop()
+
+	// Set lower GC target percentage for more aggressive collection
+	debug.SetGCPercent(50) // Trigger GC when heap grows 50% (default is 100%)
 
 	for {
 		select {
@@ -144,6 +152,8 @@ func main() {
 			if err := checkAndReport(config); err != nil {
 				log.Printf("Check failed: %v", err)
 			}
+			// Force GC after each check to clean up command outputs
+			runtime.GC()
 		case <-refreshTicker.C:
 			if err := refreshServiceList(config); err != nil {
 				log.Printf("Failed to refresh service list: %v", err)
@@ -194,7 +204,7 @@ func refreshServiceList(config *AgentConfig) error {
 		return fmt.Errorf("failed to fetch service list: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Drain and close response body to reuse connection
 	defer io.Copy(io.Discard, resp.Body)
 
@@ -222,9 +232,29 @@ func refreshServiceList(config *AgentConfig) error {
 			log.Printf("  - %s", svc)
 		}
 		cachedServices = newServices
+
+		// Clean up previousServiceStates map for services no longer monitored
+		cleanupServiceStates(newServices)
 	}
 
 	return nil
+}
+
+// cleanupServiceStates removes state entries for services no longer in the list
+func cleanupServiceStates(currentServices []string) {
+	// Create a map of current services for quick lookup
+	currentMap := make(map[string]bool, len(currentServices))
+	for _, svc := range currentServices {
+		currentMap[svc] = true
+	}
+
+	// Remove states for services not in current list
+	for svc := range previousServiceStates {
+		if !currentMap[svc] {
+			delete(previousServiceStates, svc)
+			log.Printf("Removed state tracking for: %s", svc)
+		}
+	}
 }
 
 // servicesEqual checks if two service lists are equal
@@ -252,10 +282,23 @@ func checkAndReport(config *AgentConfig) error {
 		Services: make([]ServiceReport, 0, len(cachedServices)),
 	}
 
+	changedServices := 0
 	for _, serviceName := range cachedServices {
 		serviceReport := checkService(serviceName)
 		report.Services = append(report.Services, serviceReport)
-		log.Printf("Service %s: %s", serviceName, serviceReport.Status)
+
+		// Log only if status changed
+		previousStatus, exists := previousServiceStates[serviceName]
+		if !exists || previousStatus != serviceReport.Status {
+			log.Printf("Service %s: %s (changed from %s)", serviceName, serviceReport.Status, previousStatus)
+			previousServiceStates[serviceName] = serviceReport.Status
+			changedServices++
+		}
+	}
+
+	// Log summary only if there were changes
+	if changedServices > 0 {
+		log.Printf("Status changes detected for %d service(s)", changedServices)
 	}
 
 	// Send report to server
@@ -287,10 +330,17 @@ func checkLinuxService(serviceName string) ServiceReport {
 		Name: serviceName,
 	}
 
+	// Create context with timeout to prevent hanging processes
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	// Check service status
-	cmd := exec.Command("systemctl", "is-active", serviceName)
+	cmd := exec.CommandContext(ctx, "systemctl", "is-active", serviceName)
 	output, err := cmd.Output()
 	statusStr := strings.TrimSpace(string(output))
+
+	// Clear output buffer immediately
+	output = nil
 
 	if err == nil {
 		switch statusStr {
@@ -314,15 +364,20 @@ func checkLinuxService(serviceName string) ServiceReport {
 	// Get additional info if running
 	if report.Status == StatusRunning {
 		// Get PID
-		cmd = exec.Command("systemctl", "show", "-p", "MainPID", "--value", serviceName)
+		cmd = exec.CommandContext(ctx, "systemctl", "show", "-p", "MainPID", "--value", serviceName)
 		if output, err := cmd.Output(); err == nil {
-			if pid, err := strconv.Atoi(strings.TrimSpace(string(output))); err == nil && pid > 0 {
+			pidStr := strings.TrimSpace(string(output))
+			output = nil // Clear buffer
+
+			if pid, err := strconv.Atoi(pidStr); err == nil && pid > 0 {
 				report.PID = pid
 
 				// Get memory and CPU
-				cmd = exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "rss=,%cpu=")
+				cmd = exec.CommandContext(ctx, "ps", "-p", strconv.Itoa(pid), "-o", "rss=,%cpu=")
 				if output, err := cmd.Output(); err == nil {
 					fields := strings.Fields(string(output))
+					output = nil // Clear buffer
+
 					if len(fields) >= 2 {
 						if mem, err := strconv.ParseInt(fields[0], 10, 64); err == nil {
 							report.Memory = mem
@@ -336,9 +391,11 @@ func checkLinuxService(serviceName string) ServiceReport {
 		}
 
 		// Get uptime
-		cmd = exec.Command("systemctl", "show", "-p", "ActiveEnterTimestamp", "--value", serviceName)
+		cmd = exec.CommandContext(ctx, "systemctl", "show", "-p", "ActiveEnterTimestamp", "--value", serviceName)
 		if output, err := cmd.Output(); err == nil {
 			timestampStr := strings.TrimSpace(string(output))
+			output = nil // Clear buffer
+
 			if timestampStr != "" && timestampStr != "n/a" {
 				if t, err := time.Parse("Mon 2006-01-02 15:04:05 MST", timestampStr); err == nil {
 					report.Uptime = int64(time.Since(t).Seconds())
@@ -435,7 +492,7 @@ func sendReport(serverURL string, report AgentReport) error {
 		return fmt.Errorf("failed to send report: %w", err)
 	}
 	defer resp.Body.Close()
-	
+
 	// Drain and close response body to reuse connection
 	defer io.Copy(io.Discard, resp.Body)
 

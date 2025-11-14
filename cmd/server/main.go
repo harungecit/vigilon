@@ -21,7 +21,7 @@ import (
 
 var (
 	configPath = flag.String("config", "configs/config.yaml", "Path to configuration file")
-	version    = "1.0.0"
+	version    = "1.1.2"
 )
 
 func main() {

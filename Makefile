@@ -3,7 +3,7 @@
 # Variables
 SERVER_BINARY=vigilon-server
 AGENT_BINARY=vigilon-agent
-VERSION=1.0.0
+VERSION=1.1.2
 GO=/usr/local/go/bin/go
 
 # Default target
@@ -39,7 +39,7 @@ clean:
 
 # Build for multiple platforms
 # Build for multiple platforms
-build-all: build-linux build-windows-check build-arm-check
+build-all: build-linux build-windows-check build-arm-check copy-to-web
 
 build-linux:
 	@echo "Building for Linux (amd64)..."
@@ -64,6 +64,23 @@ build-arm-check:
 	else \
 		echo "⚠️  Skipping ARM64 build (aarch64-linux-gnu-gcc not found)"; \
 		echo "   Install with: sudo apt-get install gcc-aarch64-linux-gnu"; \
+	fi
+
+# Copy agent binaries to web static directory for download
+copy-to-web:
+	@echo "Copying agent binaries to web/static/bin/..."
+	@mkdir -p web/static/bin
+	@if [ -f $(AGENT_BINARY)-linux-amd64 ]; then \
+		cp $(AGENT_BINARY)-linux-amd64 web/static/bin/ && \
+		echo "✓ Copied $(AGENT_BINARY)-linux-amd64"; \
+	fi
+	@if [ -f $(AGENT_BINARY)-linux-arm64 ]; then \
+		cp $(AGENT_BINARY)-linux-arm64 web/static/bin/ && \
+		echo "✓ Copied $(AGENT_BINARY)-linux-arm64"; \
+	fi
+	@if [ -f $(AGENT_BINARY)-windows-amd64.exe ]; then \
+		cp $(AGENT_BINARY)-windows-amd64.exe web/static/bin/ && \
+		echo "✓ Copied $(AGENT_BINARY)-windows-amd64.exe"; \
 	fi
 
 build-windows:
@@ -93,6 +110,43 @@ fmt:
 lint:
 	golangci-lint run
 
+# Create git tag and prepare release
+tag:
+	@echo "Creating git tag v$(VERSION)..."
+	@if git rev-parse v$(VERSION) >/dev/null 2>&1; then \
+		echo "Tag v$(VERSION) already exists!"; \
+		exit 1; \
+	fi
+	git tag -a v$(VERSION) -m "Release v$(VERSION)"
+	@echo "✓ Tag v$(VERSION) created"
+	@echo ""
+	@echo "To push the tag, run:"
+	@echo "  git push origin v$(VERSION)"
+
+# Create GitHub release (requires gh CLI)
+release: build-all
+	@echo "Creating GitHub release v$(VERSION)..."
+	@if ! command -v gh >/dev/null 2>&1; then \
+		echo "Error: GitHub CLI (gh) not found"; \
+		echo "Install with: sudo apt install gh"; \
+		exit 1; \
+	fi
+	@if ! git rev-parse v$(VERSION) >/dev/null 2>&1; then \
+		echo "Creating tag v$(VERSION)..."; \
+		git tag -a v$(VERSION) -m "Release v$(VERSION)"; \
+	fi
+	@echo "Pushing tag..."
+	git push origin v$(VERSION) || true
+	@echo "Creating release with binaries..."
+	gh release create v$(VERSION) \
+		--title "Vigilon v$(VERSION)" \
+		--notes-file CHANGELOG.md \
+		$(SERVER_BINARY)-linux-amd64 \
+		$(AGENT_BINARY)-linux-amd64 \
+		$(AGENT_BINARY)-linux-arm64 \
+		$(AGENT_BINARY)-windows-amd64.exe
+	@echo "✓ Release v$(VERSION) created successfully!"
+
 # Show help
 help:
 	@echo "Vigilon Makefile"
@@ -106,6 +160,8 @@ help:
 	@echo "  make clean       - Remove build artifacts"
 	@echo "  make build-all   - Build for all platforms"
 	@echo "  make deps        - Install dependencies"
+	@echo "  make tag         - Create git tag for current version"
+	@echo "  make release     - Build and create GitHub release"
 	@echo "  make fmt         - Format code"
 	@echo "  make lint        - Run linter"
 	@echo "  make help        - Show this help"
