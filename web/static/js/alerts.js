@@ -19,19 +19,25 @@ async function acknowledgeAlert(id) {
                     footer.innerHTML = '<span class="acknowledged-badge">Acknowledged just now</span>';
                 }
             }
+            Toast.success('Alert acknowledged successfully');
         } else {
             const error = await response.json();
-            alert('Failed to acknowledge alert: ' + (error.error || 'Unknown error'));
+            Toast.error(error.error || 'Unknown error', 'Failed to acknowledge alert');
         }
     } catch (error) {
-        alert('Failed to acknowledge alert: ' + error.message);
+        Toast.error(error.message, 'Failed to acknowledge alert');
     }
 }
 
 async function archiveAllAlerts() {
-    if (!confirm('Are you sure you want to archive all alerts? This will remove them from the list but keep them in the database.')) {
-        return;
-    }
+    const confirmed = await Confirm.show({
+        title: 'Archive All Alerts',
+        message: 'Are you sure you want to archive all alerts? This will remove them from the list but keep them in the database.',
+        confirmText: 'Archive All',
+        type: 'warning'
+    });
+    
+    if (!confirmed) return;
 
     try {
         const response = await fetch('/api/alerts/archive-all', {
@@ -39,14 +45,14 @@ async function archiveAllAlerts() {
         });
 
         if (response.ok) {
-            alert('All alerts archived successfully!');
-            window.location.reload();
+            Toast.success('All alerts archived successfully!');
+            setTimeout(() => window.location.reload(), 1000);
         } else {
             const error = await response.json();
-            alert('Failed to archive alerts: ' + (error.error || 'Unknown error'));
+            Toast.error(error.error || 'Unknown error', 'Failed to archive alerts');
         }
     } catch (error) {
-        alert('Failed to archive alerts: ' + error.message);
+        Toast.error(error.message, 'Failed to archive alerts');
     }
 }
 
@@ -108,7 +114,7 @@ async function loadMoreAlerts() {
         }
     } catch (error) {
         console.error('Failed to load alerts:', error);
-        alert('Failed to load more alerts: ' + error.message);
+        Toast.error(error.message, 'Failed to load more alerts');
     } finally {
         loading = false;
         if (loadMoreBtn) {

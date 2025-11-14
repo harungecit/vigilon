@@ -198,9 +198,14 @@ document.addEventListener('submit', () => {
 });
 
 async function logout() {
-    if (!confirm('Are you sure you want to logout?')) {
-        return;
-    }
+    const confirmed = await Confirm.show({
+        title: 'Logout',
+        message: 'Are you sure you want to logout?',
+        confirmText: 'Logout',
+        type: 'warning'
+    });
+    
+    if (!confirmed) return;
     
     try {
         await fetch('/api/auth/logout', { method: 'POST' });

@@ -195,14 +195,19 @@ async function editUser(id) {
         document.getElementById('userModal').style.display = 'block';
         
     } catch (error) {
-        alert('Failed to load user: ' + error.message);
+        Toast.error(error.message, 'Failed to load user');
     }
 }
 
 async function deleteUser(id, username) {
-    if (!confirm(`Are you sure you want to delete user "${username}"?`)) {
-        return;
-    }
+    const confirmed = await Confirm.show({
+        title: 'Delete User',
+        message: `Are you sure you want to delete user "${username}"?`,
+        confirmText: 'Delete',
+        type: 'danger'
+    });
+    
+    if (!confirmed) return;
     
     try {
         const response = await fetch(`/api/users/${id}`, {
@@ -210,14 +215,14 @@ async function deleteUser(id, username) {
         });
         
         if (response.ok) {
-            alert('User deleted successfully!');
+            Toast.success('User deleted successfully!');
             loadUsers();
         } else {
             const error = await response.json();
-            alert('Failed to delete user: ' + (error.error || 'Unknown error'));
+            Toast.error(error.error || 'Unknown error', 'Failed to delete user');
         }
     } catch (error) {
-        alert('Failed to delete user: ' + error.message);
+        Toast.error(error.message, 'Failed to delete user');
     }
 }
 
@@ -343,24 +348,29 @@ document.getElementById('userForm').addEventListener('submit', async (e) => {
         });
         
         if (response.ok) {
-            alert(isEdit ? 'User updated successfully!' : 'User created successfully!');
+            Toast.success(isEdit ? 'User updated successfully!' : 'User created successfully!');
             closeModal();
             loadUsers();
         } else {
             const error = await response.json();
-            alert('Failed to save user: ' + (error.error || 'Unknown error'));
+            Toast.error(error.error || 'Unknown error', 'Failed to save user');
         }
     } catch (error) {
-        alert('Failed to save user: ' + error.message);
+        Toast.error(error.message, 'Failed to save user');
     }
 });
 
 // Old password form handler removed - now using dynamic modal in changePassword() function
 
 async function logout() {
-    if (!confirm('Are you sure you want to logout?')) {
-        return;
-    }
+    const confirmed = await Confirm.show({
+        title: 'Logout',
+        message: 'Are you sure you want to logout?',
+        confirmText: 'Logout',
+        type: 'warning'
+    });
+    
+    if (!confirmed) return;
     
     try {
         await fetch('/api/auth/logout', { method: 'POST' });
@@ -468,11 +478,11 @@ async function editRolePermissions() {
         const role = await roleResponse.json();
         
         if (!canEditRole(role)) {
-            alert('You do not have permission to edit permissions for this role.');
+            Toast.warning('You do not have permission to edit permissions for this role.');
             return;
         }
     } catch (error) {
-        alert('Failed to verify permissions: ' + error.message);
+        Toast.error(error.message, 'Failed to verify permissions');
         return;
     }
     
@@ -608,7 +618,7 @@ document.getElementById('editRolePermissionsForm').addEventListener('submit', as
         });
         
         if (response.ok) {
-            alert('Permissions updated successfully!');
+            Toast.success('Permissions updated successfully!');
             closeModal();
             // Go back to permissions view or roles management
             if (previousModal === 'rolesManagement') {
@@ -618,10 +628,10 @@ document.getElementById('editRolePermissionsForm').addEventListener('submit', as
             }
         } else {
             const error = await response.json();
-            alert('Failed to update permissions: ' + (error.error || 'Unknown error'));
+            Toast.error(error.error || 'Unknown error', 'Failed to update permissions');
         }
     } catch (error) {
-        alert('Failed to update permissions: ' + error.message);
+        Toast.error(error.message, 'Failed to update permissions');
     }
 });
 
@@ -639,7 +649,7 @@ document.addEventListener('change', (e) => {
 async function showRolesManagement() {
     // Check permission first
     if (!canViewRoles()) {
-        alert('You do not have permission to view roles.');
+        Toast.warning('You do not have permission to view roles.');
         return;
     }
     
@@ -696,7 +706,7 @@ async function showRolesManagement() {
 
 function showAddRoleModal() {
     if (!canCreateRole()) {
-        alert('You do not have permission to create roles.');
+        Toast.warning('You do not have permission to create roles.');
         return;
     }
     
@@ -716,7 +726,7 @@ async function editRole(roleId) {
         
         // Check permission before editing
         if (!canEditRole(role)) {
-            alert('You do not have permission to edit this role.');
+            Toast.warning('You do not have permission to edit this role.');
             return;
         }
         
@@ -730,7 +740,7 @@ async function editRole(roleId) {
         document.getElementById('roleModal').style.display = 'block';
         
     } catch (error) {
-        alert('Failed to load role: ' + error.message);
+        Toast.error(error.message, 'Failed to load role');
     }
 }
 
@@ -742,17 +752,22 @@ async function deleteRole(roleId, roleName) {
         const role = await roleResponse.json();
         
         if (!canDeleteRole(role)) {
-            alert('You do not have permission to delete this role.');
+            Toast.warning('You do not have permission to delete this role.');
             return;
         }
     } catch (error) {
-        alert('Failed to verify permissions: ' + error.message);
+        Toast.error(error.message, 'Failed to verify permissions');
         return;
     }
     
-    if (!confirm(`Are you sure you want to delete role "${roleName}"?\n\nAll users with this role will need to be reassigned.`)) {
-        return;
-    }
+    const confirmed = await Confirm.show({
+        title: 'Delete Role',
+        message: `Are you sure you want to delete role "${roleName}"?\n\nAll users with this role will need to be reassigned.`,
+        confirmText: 'Delete',
+        type: 'danger'
+    });
+    
+    if (!confirmed) return;
     
     try {
         const response = await fetch(`/api/roles/${roleId}`, {
@@ -760,14 +775,14 @@ async function deleteRole(roleId, roleName) {
         });
         
         if (response.ok) {
-            alert('Role deleted successfully!');
+            Toast.success('Role deleted successfully!');
             showRolesManagement();
         } else {
             const error = await response.json();
-            alert('Failed to delete role: ' + (error.error || 'Unknown error'));
+            Toast.error(error.error || 'Unknown error', 'Failed to delete role');
         }
     } catch (error) {
-        alert('Failed to delete role: ' + error.message);
+        Toast.error(error.message, 'Failed to delete role');
     }
 }
 
@@ -794,16 +809,16 @@ document.getElementById('roleForm').addEventListener('submit', async (e) => {
         });
         
         if (response.ok) {
-            alert(roleId ? 'Role updated successfully!' : 'Role created successfully!');
+            Toast.success(roleId ? 'Role updated successfully!' : 'Role created successfully!');
             closeModal();
             showRolesManagement();
             loadRoles(); // Refresh roles dropdown
         } else {
             const error = await response.json();
-            alert('Failed to save role: ' + (error.error || 'Unknown error'));
+            Toast.error(error.error || 'Unknown error', 'Failed to save role');
         }
     } catch (error) {
-        alert('Failed to save role: ' + error.message);
+        Toast.error(error.message, 'Failed to save role');
     }
 });
 

@@ -96,9 +96,14 @@ async function toggleServerStatus(serverId, currentStatus) {
     const newStatus = !currentStatus;
     const action = newStatus ? 'enable' : 'disable';
 
-    if (!confirm(`Are you sure you want to ${action} this server?`)) {
-        return;
-    }
+    const confirmed = await Confirm.show({
+        title: `${action.charAt(0).toUpperCase() + action.slice(1)} Server`,
+        message: `Are you sure you want to ${action} this server?`,
+        confirmText: action.charAt(0).toUpperCase() + action.slice(1),
+        type: 'warning'
+    });
+    
+    if (!confirmed) return;
 
     try {
         // Get current server data
@@ -120,14 +125,14 @@ async function toggleServerStatus(serverId, currentStatus) {
         });
 
         if (response.ok) {
-            alert(`Server ${action}d successfully!`);
+            Toast.success(`Server ${action}d successfully!`);
             window.location.reload();
         } else {
             const error = await response.json();
-            alert('Failed to update server: ' + (error.error || 'Unknown error'));
+            Toast.error(error.error || 'Unknown error', 'Failed to update server');
         }
     } catch (error) {
-        alert('Failed to update server: ' + error.message);
+        Toast.error(error.message, 'Failed to update server');
     }
 }
 
@@ -135,9 +140,14 @@ async function toggleServiceStatus(serviceId, currentStatus) {
     const newStatus = !currentStatus;
     const action = newStatus ? 'enable' : 'disable';
 
-    if (!confirm(`Are you sure you want to ${action} this service?`)) {
-        return;
-    }
+    const confirmed = await Confirm.show({
+        title: `${action.charAt(0).toUpperCase() + action.slice(1)} Service`,
+        message: `Are you sure you want to ${action} this service?`,
+        confirmText: action.charAt(0).toUpperCase() + action.slice(1),
+        type: 'warning'
+    });
+    
+    if (!confirmed) return;
 
     try {
         // Get current service data
@@ -161,14 +171,14 @@ async function toggleServiceStatus(serviceId, currentStatus) {
         });
 
         if (response.ok) {
-            alert(`Service ${action}d successfully!`);
+            Toast.success(`Service ${action}d successfully!`);
             window.location.reload();
         } else {
             const error = await response.json();
-            alert('Failed to update service: ' + (error.error || 'Unknown error'));
+            Toast.error(error.error || 'Unknown error', 'Failed to update service');
         }
     } catch (error) {
-        alert('Failed to update service: ' + error.message);
+        Toast.error(error.message, 'Failed to update service');
     }
 }
 
@@ -205,14 +215,14 @@ document.getElementById('editServerForm').addEventListener('submit', async (e) =
         });
 
         if (response.ok) {
-            alert('Server updated successfully!');
+            Toast.success('Server updated successfully!');
             window.location.reload();
         } else {
             const error = await response.json();
-            alert('Failed to update server: ' + (error.error || 'Unknown error'));
+            Toast.error(error.error || 'Unknown error', 'Failed to update server');
         }
     } catch (error) {
-        alert('Failed to update server: ' + error.message);
+        Toast.error(error.message, 'Failed to update server');
     }
 });
 
@@ -238,36 +248,42 @@ document.getElementById('addServiceForm').addEventListener('submit', async (e) =
         });
 
         if (response.ok) {
-            alert('Service added successfully!');
+            Toast.success('Service added successfully!');
             window.location.reload();
         } else {
             const error = await response.json();
-            alert('Failed to add service: ' + (error.error || 'Unknown error'));
+            Toast.error(error.error || 'Unknown error', 'Failed to add service');
         }
     } catch (error) {
-        alert('Failed to add service: ' + error.message);
+        Toast.error(error.message, 'Failed to add service');
     }
 });
 
-function deleteService(serviceId) {
-    if (!confirm('Are you sure you want to delete this service?')) {
-        return;
-    }
+async function deleteService(serviceId) {
+    const confirmed = await Confirm.show({
+        title: 'Delete Service',
+        message: 'Are you sure you want to delete this service?',
+        confirmText: 'Delete',
+        type: 'danger'
+    });
+    
+    if (!confirmed) return;
 
-    fetch(`/api/services/${serviceId}`, {
-        method: 'DELETE'
-    })
-    .then(response => {
+    try {
+        const response = await fetch(`/api/services/${serviceId}`, {
+            method: 'DELETE'
+        });
+        
         if (response.ok) {
+            Toast.success('Service deleted successfully');
             location.reload();
         } else {
-            alert('Failed to delete service');
+            Toast.error('Failed to delete service');
         }
-    })
-    .catch(error => {
+    } catch (error) {
         console.error('Error deleting service:', error);
-        alert('Failed to delete service');
-    });
+        Toast.error(error.message, 'Failed to delete service');
+    }
 }
 
 async function logout() {

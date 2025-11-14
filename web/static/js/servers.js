@@ -111,16 +111,21 @@ document.getElementById('addServerForm').addEventListener('submit', async (e) =>
 });
 
 async function disconnectServer(id) {
-    if (!confirm('Are you sure you want to disconnect this server? Agent will stop being monitored.')) {
-        return;
-    }
+    const confirmed = await Confirm.show({
+        title: 'Disconnect Server',
+        message: 'Are you sure you want to disconnect this server? Agent will stop being monitored.',
+        confirmText: 'Disconnect',
+        type: 'warning'
+    });
+    
+    if (!confirmed) return;
 
     try {
         await apiFetch(`/api/servers/${id}/disconnect`, {
             method: 'POST',
         });
 
-        showToast('Server disconnected successfully!', 'success');
+        Toast.success('Server disconnected successfully!');
         setTimeout(() => window.location.reload(), 1000);
     } catch (error) {
         // Error already handled by apiFetch
@@ -128,16 +133,21 @@ async function disconnectServer(id) {
 }
 
 async function deleteServer(serverId) {
-    if (!confirm('Are you sure you want to delete this server?')) {
-        return;
-    }
+    const confirmed = await Confirm.show({
+        title: 'Delete Server',
+        message: 'Are you sure you want to delete this server? This action cannot be undone.',
+        confirmText: 'Delete',
+        type: 'danger'
+    });
+    
+    if (!confirmed) return;
 
     try {
         await apiFetch(`/api/servers/${serverId}`, {
             method: 'DELETE'
         });
         
-        showToast('Server deleted successfully!', 'success');
+        Toast.success('Server deleted successfully!');
         setTimeout(() => location.reload(), 1000);
     } catch (error) {
         // Error already handled by apiFetch
